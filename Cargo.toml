@@ -1,6 +1,6 @@
 [package]
 name = "ndarray-slice"
-version = "0.1.0"
+version = "0.1.1"
 rust-version = "1.58"
 edition = "2021"
 authors = ["Rouven Spreckels <rs@qu1x.dev>"]
