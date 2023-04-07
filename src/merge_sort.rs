@@ -2,6 +2,8 @@
 //!
 //! [`core::slice::sort`]: https://doc.rust-lang.org/src/core/slice/sort.rs.html
 
+#![cfg(feature = "alloc")]
+
 use crate::partition::reverse;
 use core::{mem, ptr};
 use ndarray::{s, ArrayViewMut1, IndexLonger};

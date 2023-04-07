@@ -20,7 +20,7 @@ keywords = [
 categories = [
 	"algorithms",
 	"data-structures",
-	"no-standard-library",
+	"no-std::no-alloc",
 	"science",
 ]
 include = [
@@ -43,7 +43,8 @@ quickcheck_macros = "1.0.0"
 
 [features]
 default = ["std"]
-std = ["ndarray/std"]
+alloc = []
+std = ["alloc", "ndarray/std"]
 
 [profile.test]
 opt-level = 2

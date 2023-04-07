@@ -2,14 +2,18 @@
 //!
 //! [`alloc::slice`]: https://doc.rust-lang.org/src/alloc/slice.rs.html
 
-#![cfg(not(no_global_oom_handling))]
+#![cfg(feature = "alloc")]
 
 use crate::merge_sort::{merge_sort, TimSortRun};
-use core::mem;
+use core::{alloc::Layout, mem};
 use ndarray::ArrayViewMut1;
 
+#[cfg(not(feature = "std"))]
 extern crate alloc as no_std_alloc;
-use no_std_alloc::alloc;
+#[cfg(not(feature = "std"))]
+use no_std_alloc::alloc::{alloc, dealloc};
+#[cfg(feature = "std")]
+use std::alloc::{alloc, dealloc};
 
 #[inline]
 pub fn stable_sort<T, F>(v: ArrayViewMut1<'_, T>, mut is_less: F)
@@ -25,7 +29,7 @@ where
 		// SAFETY: Creating the layout is safe as long as merge_sort never calls this with len >
 		// v.len(). Alloc in general will only be used as 'shadow-region' to store temporary swap
 		// elements.
-		unsafe { alloc::alloc(alloc::Layout::array::<T>(len).unwrap_unchecked()) as *mut T }
+		unsafe { alloc(Layout::array::<T>(len).unwrap_unchecked()) as *mut T }
 	};
 
 	let elem_dealloc_fn = |buf_ptr: *mut T, len: usize| {
@@ -33,9 +37,9 @@ where
 		// v.len(). The caller must ensure that buf_ptr was created by elem_alloc_fn with the same
 		// len.
 		unsafe {
-			alloc::dealloc(
+			dealloc(
 				buf_ptr as *mut u8,
-				alloc::Layout::array::<T>(len).unwrap_unchecked(),
+				Layout::array::<T>(len).unwrap_unchecked(),
 			);
 		}
 	};
@@ -43,19 +47,16 @@ where
 	let run_alloc_fn = |len: usize| -> *mut TimSortRun {
 		// SAFETY: Creating the layout is safe as long as merge_sort never calls this with an
 		// obscene length or 0.
-		unsafe {
-			alloc::alloc(alloc::Layout::array::<TimSortRun>(len).unwrap_unchecked())
-				as *mut TimSortRun
-		}
+		unsafe { alloc(Layout::array::<TimSortRun>(len).unwrap_unchecked()) as *mut TimSortRun }
 	};
 
 	let run_dealloc_fn = |buf_ptr: *mut TimSortRun, len: usize| {
 		// SAFETY: The caller must ensure that buf_ptr was created by elem_alloc_fn with the same
 		// len.
 		unsafe {
-			alloc::dealloc(
+			dealloc(
 				buf_ptr as *mut u8,
-				alloc::Layout::array::<TimSortRun>(len).unwrap_unchecked(),
+				Layout::array::<TimSortRun>(len).unwrap_unchecked(),
 			);
 		}
 	};

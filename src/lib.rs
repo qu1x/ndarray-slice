@@ -24,7 +24,7 @@
 //! assert_eq!(column.as_slice_mut(), None);
 //!
 //! // Instead, sorting is specifically implemented for non-contiguous mutable (sub)views.
-//! column.sort();
+//! column.sort_unstable();
 //!
 //! assert!(v == arr2(&[[-5, 4, 1, -3, -1],
 //!                     [ 8, 3, 2,  4,  2],
@@ -62,14 +62,17 @@
 //!
 //! # Features
 //!
-//!   * [`std`]: Enables methods requiring [`Vec`] or [`Array1`]. Enabled by default.
+//!   * `alloc`: Enables stable sort. Enabled by `std`.
+//!   * `std`: Enables selection of many indices. Enabled by default.
 
-#![forbid(missing_docs)]
-#![deny(rustdoc::broken_intra_doc_links)]
+#![deny(
+	missing_docs,
+	rustdoc::broken_intra_doc_links,
+	rustdoc::missing_crate_level_docs
+)]
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(docsrs, feature(doc_auto_cfg))]
-#![cfg_attr(miri, feature(strict_provenance))]
-#![cfg_attr(miri, feature(maybe_uninit_slice))]
+#![cfg_attr(miri, feature(strict_provenance), feature(maybe_uninit_slice))]
 
 mod heap_sort;
 mod insertion_sort;
@@ -84,11 +87,13 @@ use crate::partition::partition_at_indices;
 #[cfg(feature = "std")]
 use ndarray::Array1;
 
+#[cfg(feature = "alloc")]
+use crate::stable_sort::stable_sort;
+
 use crate::{
 	partition::{is_sorted, partition_at_index, reverse},
 	partition_dedup::partition_dedup,
 	quick_sort::quick_sort,
-	stable_sort::stable_sort,
 };
 use core::cmp::Ordering::{self, Greater, Less};
 use ndarray::{ArrayBase, ArrayViewMut1, Data, DataMut, Ix1};
@@ -136,7 +141,7 @@ where
 	/// v.sort();
 	/// assert!(v == arr1(&[-5, -3, 1, 2, 4]));
 	/// ```
-	#[cfg(not(no_global_oom_handling))]
+	#[cfg(feature = "alloc")]
 	fn sort(&mut self)
 	where
 		A: Ord,
@@ -190,7 +195,7 @@ where
 	/// v.sort_by(|a, b| b.cmp(a));
 	/// assert!(v == arr1(&[5, 4, 3, 2, 1]));
 	/// ```
-	#[cfg(not(no_global_oom_handling))]
+	#[cfg(feature = "alloc")]
 	fn sort_by<F>(&mut self, compare: F)
 	where
 		F: FnMut(&A, &A) -> Ordering,
@@ -200,9 +205,13 @@ where
 	/// This sort is stable (i.e., does not reorder equal elements) and *O*(*m* *n* log(*n*))
 	/// worst-case, where the key function is *O*(*m*).
 	///
-	/// For expensive key functions (e.g. functions that are not simple property accesses or
-	/// basic operations), [`sort_by_cached_key`](Slice1Ext::sort_by_cached_key) is likely to be
-	/// significantly faster, as it does not recompute element keys.
+	#[cfg_attr(
+		feature = "std",
+		doc = "\
+	For expensive key functions (e.g. functions that are not simple property accesses or
+	basic operations), [`sort_by_cached_key`](Slice1Ext::sort_by_cached_key) is likely to be
+	significantly faster, as it does not recompute element keys."
+	)]
 	///
 	/// When applicable, unstable sorting is preferred because it is generally faster than stable
 	/// sorting and it doesn't allocate auxiliary memory.
@@ -228,7 +237,7 @@ where
 	/// v.sort_by_key(|k| k.abs());
 	/// assert!(v == arr1(&[1, 2, -3, 4, -5]));
 	/// ```
-	#[cfg(not(no_global_oom_handling))]
+	#[cfg(feature = "alloc")]
 	fn sort_by_key<K, F>(&mut self, f: F)
 	where
 		K: Ord,
@@ -990,8 +999,13 @@ where
 	/// Binary searches this array with a key extraction function.
 	/// This behaves similarly to [`contains`] if this array is sorted.
 	///
-	/// Assumes that the array is sorted by the key, for instance with
-	/// [`sort_by_key`] using the same key extraction function.
+	#[cfg_attr(
+		feature = "alloc",
+		doc = "\
+	    Assumes that the array is sorted by the key, for instance with
+	    [`sort_by_key`] using the same key extraction function.
+	"
+	)]
 	///
 	/// If the value is found then [`Result::Ok`] is returned, containing the
 	/// index of the matching element. If there are multiple matches, then any
@@ -1004,7 +1018,12 @@ where
 	/// See also [`binary_search`], [`binary_search_by`], and [`partition_point`].
 	///
 	/// [`contains`]: Slice1Ext::contains
-	/// [`sort_by_key`]: Slice1Ext::sort_by_key
+	#[cfg_attr(
+		feature = "alloc",
+		doc = "\
+	    [`sort_by_key`]: Slice1Ext::sort_by_key
+	"
+	)]
 	/// [`binary_search`]: Slice1Ext::binary_search
 	/// [`binary_search_by`]: Slice1Ext::binary_search_by
 	/// [`partition_point`]: Slice1Ext::partition_point
@@ -1139,7 +1158,7 @@ impl<A, S> Slice1Ext<A, S> for ArrayBase<S, Ix1>
 where
 	S: Data<Elem = A>,
 {
-	#[cfg(not(no_global_oom_handling))]
+	#[cfg(feature = "alloc")]
 	#[inline]
 	fn sort(&mut self)
 	where
@@ -1148,7 +1167,7 @@ where
 	{
 		stable_sort(self.view_mut(), A::lt);
 	}
-	#[cfg(not(no_global_oom_handling))]
+	#[cfg(feature = "alloc")]
 	#[inline]
 	fn sort_by<F>(&mut self, mut compare: F)
 	where
@@ -1157,7 +1176,7 @@ where
 	{
 		stable_sort(self.view_mut(), &mut |a: &A, b: &A| compare(a, b) == Less)
 	}
-	#[cfg(not(no_global_oom_handling))]
+	#[cfg(feature = "alloc")]
 	#[inline]
 	fn sort_by_key<K, F>(&mut self, mut f: F)
 	where
