@@ -65,6 +65,7 @@
 //!   * [`std`]: Enables methods requiring [`Vec`] or [`Array1`]. Enabled by default.
 
 #![forbid(missing_docs)]
+#![deny(rustdoc::broken_intra_doc_links)]
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(docsrs, feature(doc_auto_cfg))]
 #![cfg_attr(miri, feature(strict_provenance))]
