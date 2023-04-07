@@ -45,7 +45,7 @@ jobs:
       uses: actions-rs/cargo@v1
       with:
         command: doc
-        args: --no-default-features --feature alloc
+        args: --no-default-features --features alloc
     - name: doc-no_alloc
       uses: actions-rs/cargo@v1
       with:
@@ -97,7 +97,7 @@ jobs:
       uses: actions-rs/cargo@v1
       with:
         command: doc
-        args: --no-default-features --feature alloc
+        args: --no-default-features --features alloc
       env:
         RUSTDOCFLAGS: "--cfg docsrs"
     - name: doc-no_alloc
