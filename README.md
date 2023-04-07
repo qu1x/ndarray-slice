@@ -83,11 +83,8 @@ See the [release history](RELEASES.md) to keep track of the development.
 
 ## Features
 
-  * [`std`]: Enables methods requiring [`Vec`] or [`Array1`]. Enabled by default.
-
-[`std`]: https://doc.rust-lang.org/std/index.html
-[`Vec`]: https://doc.rust-lang.org/std/vec/struct.Vec.html
-[`Array1`]: https://docs.rs/ndarray/latest/ndarray/type.Array1.html
+  * `alloc`: Enables stable sort. Enabled by `std`.
+  * `std`: Enables selection of many indices. Enabled by default.
 
 # License
 
