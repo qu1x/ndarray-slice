@@ -36,13 +36,17 @@
 //!
 //! # Current Implementation
 //!
-//! Complexities where *n* is the length of the (sub)view.
+//! Complexities where *n* is the length of the (sub)view and *m* the number of indices to select.
 //!
-//! | Algorithm | Stable | Allocation | Recursive | Average  | Worse-Case        |
-//! |-----------|------- |------------|-----------|----------|-------------------|
-//! | Sorting   | yes    | yes        | no        | *O*(*n*) | *O*(*n* log(*n*)) |
-//! | Sorting   | no     | no         | yes       | *O*(*n*) | *O*(*n* log(*n*)) |
-//! | Selection | no     | no         | no        | *O*(*n*) | *O*(*n* log(*n*)) |
+//! | Resource | Complexity | Sorting (stable) | Sorting (unstable)  | Selection (unstable)     | Multi-Selection (unstable) |
+//! |----------|------------|------------------|---------------------|--------------------------|----------------------------|
+//! | Time     | Best       | *O*(*n*)         | *O*(*n*)            | *O*(*n*)                 | *O*(*mn*)                  |
+//! | Time     | Expected   | *O*(*n* log *n*) | *O*(*n* log *n*)    | *O*(*n*)                 | *O*(*mn*)                  |
+//! | Time     | Worst      | *O*(*n* log *n*) | *O*(*n* log *n*)    | *O*(*n* log *n*)         | *O*(*mn* log *n*)          |
+//! | Space    | Best       | *O*(1)           | *O*(1)              | *O*(1)                   | *O*(*m*)                   |
+//! | Space    | Expected   | *O*(*n*/2)       | *O*(log *n*)        | *O*(log *n*)             | *O*(*m* log *n*)           |
+//! | Spoce    | Worst      | *O*(*n*/2)       | *O*(log *n*)        | *O*(log *n*)             | *O*(*m* log *n*)           |
+//!
 //!
 //! [sorting]: https://en.wikipedia.org/wiki/Sorting_algorithm
 //! [selection]: https://en.wikipedia.org/wiki/Selection_algorithm
@@ -54,7 +58,7 @@
 //!
 //! # Roadmap
 //!
-//!   * Lower worst-case complexity from *O*(*n* log(*n*)) to *O*(*n*) for selection algorithms.
+//!   * Lower worst-case complexity from *O*(*n* log *n*) to *O*(*n*) for selection algorithms.
 //!   * Add `SliceExt` trait for *n*-dimensional array or (sub)view with methods expecting `Axis` as
 //!     their first argument. Comparing methods will always be suffixed with `_by` or `_by_key`
 //!     defining how to compare multi-dimensional elements (e.g., columns) along the provided axis
@@ -115,7 +119,7 @@ pub trait Slice1Ext<A, S>
 where
 	S: Data<Elem = A>,
 {
-	/// This sort is stable (i.e., does not reorder equal elements) and *O*(*n* log(*n*)) worst-case.
+	/// This sort is stable (i.e., does not reorder equal elements) and *O*(*n* log *n*) worst-case.
 	///
 	/// When applicable, unstable sorting is preferred because it is generally faster than stable
 	/// sorting and it doesn't allocate auxiliary memory.
@@ -148,7 +152,7 @@ where
 		S: DataMut;
 	/// Sorts the array with a comparator function.
 	///
-	/// This sort is stable (i.e., does not reorder equal elements) and *O*(*n* log(*n*)) worst-case.
+	/// This sort is stable (i.e., does not reorder equal elements) and *O*(*n* log *n*) worst-case.
 	///
 	/// The comparator function must define a total ordering for the elements in the array. If
 	/// the ordering is not total, the order of the elements is unspecified. An order is a
@@ -202,7 +206,7 @@ where
 		S: DataMut;
 	/// Sorts the array with a key extraction function.
 	///
-	/// This sort is stable (i.e., does not reorder equal elements) and *O*(*m* *n* log(*n*))
+	/// This sort is stable (i.e., does not reorder equal elements) and *O*(*mn* log *n*)
 	/// worst-case, where the key function is *O*(*m*).
 	///
 	#[cfg_attr(
@@ -251,7 +255,7 @@ where
 	/// The order of calls to the key function is unspecified and may change in future versions
 	/// of the standard library.
 	///
-	/// This sort is stable (i.e., does not reorder equal elements) and *O*(*m* *n* + *n* log(*n*))
+	/// This sort is stable (i.e., does not reorder equal elements) and *O*(*mn* + *n* log *n*)
 	/// worst-case, where the key function is *O*(*m*).
 	///
 	/// For simple key functions (e.g., functions that are property accesses or
@@ -291,7 +295,7 @@ where
 	/// Sorts the array, but might not preserve the order of equal elements.
 	///
 	/// This sort is unstable (i.e., may reorder equal elements), in-place
-	/// (i.e., does not allocate), and *O*(*n* log(*n*)) worst-case.
+	/// (i.e., does not allocate), and *O*(*n* log *n*) worst-case.
 	///
 	/// # Current Implementation
 	///
@@ -324,7 +328,7 @@ where
 	/// elements.
 	///
 	/// This sort is unstable (i.e., may reorder equal elements), in-place
-	/// (i.e., does not allocate), and *O*(*n* log(*n*)) worst-case.
+	/// (i.e., does not allocate), and *O*(*n* log *n*) worst-case.
 	///
 	/// The comparator function must define a total ordering for the elements in the array. If
 	/// the ordering is not total, the order of the elements is unspecified. An order is a
@@ -378,7 +382,7 @@ where
 	/// elements.
 	///
 	/// This sort is unstable (i.e., may reorder equal elements), in-place
-	/// (i.e., does not allocate), and *O*(*m* *n* log(*n*)) worst-case, where the key function is
+	/// (i.e., does not allocate), and *O*(*mn* log *n*) worst-case, where the key function is
 	/// *O*(*m*).
 	///
 	/// # Current Implementation
@@ -624,8 +628,10 @@ where
 	/// This reordering has the additional property that any value at position `i < index` will be
 	/// less than or equal to any value at a position `j > index`. Additionally, this reordering is
 	/// unstable (i.e. any number of equal elements may end up at position `index`), in-place
-	/// (i.e. does not allocate), and *O*(*n* log(*n*)) worst-case. This function is also/ known as "kth
-	/// element" in other libraries. It returns a triplet of the following from the reordered array:
+	/// (i.e. does not allocate), and *O*(*n*) on avrage. The worst-case performance is *O*(*n* log *n*).
+	/// This function is also known as "kth element" in other libraries.
+	///
+	/// It returns a triplet of the following from the reordered array:
 	/// the subarray prior to `index`, the element at `index`, and the subarray after `index`;
 	/// accordingly, the values in those two subarrays will respectively all be less-than-or-equal-to
 	/// and greater-than-or-equal-to the value of the element at `index`.
@@ -672,8 +678,10 @@ where
 	/// This reordering has the additional property that any value at position `i < index` will be
 	/// less than or equal to any value at a position `j > index` using the comparator function.
 	/// Additionally, this reordering is unstable (i.e. any number of equal elements may end up at
-	/// position `index`), in-place (i.e. does not allocate), and *O*(*n* log(*n*)) worst-case. This function
-	/// is also known as "kth element" in other libraries. It returns a triplet of the following from
+	/// position `index`), in-place (i.e. does not allocate), and *O*(*n*) on average. The worst-case
+	/// performance is *O*(*n* log *n*). This function is also known as "kth element" in other libraries.
+	///
+	/// It returns a triplet of the following from
 	/// the array reordered according to the provided comparator function: the subarray prior to
 	/// `index`, the element at `index`, and the subarray after `index`; accordingly, the values in
 	/// those two subarrays will respectively all be less-than-or-equal-to and greater-than-or-equal-to
@@ -722,8 +730,10 @@ where
 	/// This reordering has the additional property that any value at position `i < index` will be
 	/// less than or equal to any value at a position `j > index` using the key extraction function.
 	/// Additionally, this reordering is unstable (i.e. any number of equal elements may end up at
-	/// position `index`), in-place (i.e. does not allocate), and *O*(*n* log(*n*)) worst-case. This function
-	/// is also known as "kth element" in other libraries. It returns a triplet of the following from
+	/// position `index`), in-place (i.e. does not allocate), and *O*(*n*) on average. The worst-case
+	/// porformance is *O*(*n* log *n*). This function is also known as "kth element" in other libraries.
+	///
+	/// It returns a triplet of the following from
 	/// the array reordered according to the provided key extraction function: the subarray prior to
 	/// `index`, the element at `index`, and the subarray after `index`; accordingly, the values in
 	/// those two subarrays will respectively all be less-than-or-equal-to and greater-than-or-equal-to
