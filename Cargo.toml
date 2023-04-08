@@ -24,10 +24,11 @@ categories = [
 	"science",
 ]
 include = [
-	"src/**.rs",
+	"src/**/*.rs",
 	"Cargo.toml",
 	"README.md",
 	"RELEASES.md",
+	"LICENSES/*",
 ]
 
 [package.metadata.docs.rs]
