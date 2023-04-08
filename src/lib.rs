@@ -478,10 +478,12 @@ where
 	///
 	/// # Current Implementation
 	///
-	/// The current algorithm chooses `indices.len() / 2` as pivot and recurses into its left and
-	/// right subviews with corresponding left and right subviews of `self` (i.e., `..at` and
-	/// `at + 1..`). Requiring `indices` to be already sorted, reduces the time complexity in the
-	/// length *m* of `indices` from *O*(*m*) to *O*(log *m*).
+	/// The current algorithm chooses `at = indices.len() / 2` as pivot index and recurses into the
+	/// left and right subviews of `indices` (i.e., `..at` and `at + 1..`) with corresponding left
+	/// and right subviews of `self` (i.e., `..pivot` and `pivot + 1..`) where `pivot = indices[at]`.
+	/// Requiring `indices` to be already sorted, reduces the time complexity in the length *m* of
+	/// `indices` from *O*(*m*) to *O*(log *m*) compared to invoking [`select_nth_unstable`] on the
+	/// full view of `self` for each index.
 	///
 	/// # Panics
 	///
@@ -528,10 +530,12 @@ where
 	///
 	/// # Current Implementation
 	///
-	/// The current algorithm chooses `indices.len() / 2` as pivot and recurses into its left and
-	/// right subviews with corresponding left and right subviews of `self` (i.e., `..at` and
-	/// `at + 1..`). Requiring `indices` to be already sorted, reduces the time complexity in the
-	/// length *m* of `indices` from *O*(*m*) to *O*(log *m*).
+	/// The current algorithm chooses `at = indices.len() / 2` as pivot index and recurses into the
+	/// left and right subviews of `indices` (i.e., `..at` and `at + 1..`) with corresponding left
+	/// and right subviews of `self` (i.e., `..pivot` and `pivot + 1..`) where `pivot = indices[at]`.
+	/// Requiring `indices` to be already sorted, reduces the time complexity in the length *m* of
+	/// `indices` from *O*(*m*) to *O*(log *m*) compared to invoking [`select_nth_unstable_by`] on the
+	/// full view of `self` for each index.
 	///
 	/// # Panics
 	///
@@ -580,10 +584,12 @@ where
 	///
 	/// # Current Implementation
 	///
-	/// The current algorithm chooses `indices.len() / 2` as pivot and recurses into its left and
-	/// right subviews with corresponding left and right subviews of `self` (i.e., `..at` and
-	/// `at + 1..`). Requiring `indices` to be already sorted, reduces the time complexity in the
-	/// length *m* of `indices` from *O*(*m*) to *O*(log *m*).
+	/// The current algorithm chooses `at = indices.len() / 2` as pivot index and recurses into the
+	/// left and right subviews of `indices` (i.e., `..at` and `at + 1..`) with corresponding left
+	/// and right subviews of `self` (i.e., `..pivot` and `pivot + 1..`) where `pivot = indices[at]`.
+	/// Requiring `indices` to be already sorted, reduces the time complexity in the length *m* of
+	/// `indices` from *O*(*m*) to *O*(log *m*) compared to invoking [`select_nth_unstable_by_key`] on the
+	/// full view of `self` for each index.
 	///
 	/// # Panics
 	///
