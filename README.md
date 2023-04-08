@@ -24,7 +24,7 @@ non-contiguous (sub)views into *n*-dimensional arrays. Reimplements algorithms i
 ## Example
 
 ```rust
-use ndarray_slice::{Slice1Ext, ndarray::arr2};
+use ndarray_slice::{ndarray::arr2, Slice1Ext};
 
 // 2-dimensional array of 4 rows and 5 columns.
 let mut v = arr2(&[[-5, 4, 1, -3,  2],   // row 0, axis 0
@@ -43,7 +43,7 @@ let mut column = v.column_mut(4);
 assert_eq!(column.as_slice_mut(), None);
 
 // Instead, sorting is specifically implemented for non-contiguous mutable (sub)views.
-column.sort();
+column.sort_unstable();
 
 assert!(v == arr2(&[[-5, 4, 1, -3, -1],
                     [ 8, 3, 2,  4,  2],
@@ -55,13 +55,17 @@ assert!(v == arr2(&[[-5, 4, 1, -3, -1],
 
 ## Current Implementation
 
-Complexities where *n* is the length of the (sub)view.
+Complexities where *n* is the length of the (sub)view and *m* the count of indices to select.
 
-| Algorithm | Stable | Allocation | Recursive | Average  | Worse-Case        |
-|-----------|------- |------------|-----------|----------|-------------------|
-| Sorting   | yes    | yes        | no        | *O*(*n*) | *O*(*n* log(*n*)) |
-| Sorting   | no     | no         | yes       | *O*(*n*) | *O*(*n* log(*n*)) |
-| Selection | no     | no         | no        | *O*(*n*) | *O*(*n* log(*n*)) |
+| Resource | Complexity | Sorting (stable) | Sorting (unstable)  | Selection (unstable)     | Bulk Selection (unstable) |
+|----------|------------|------------------|---------------------|--------------------------|---------------------------|
+| Time     | Best       | *O*(*n*)         | *O*(*n*)            | *O*(*n*)                 | *O*(*n* log *m*)          |
+| Time     | Expected   | *O*(*n* log *n*) | *O*(*n* log *n*)    | *O*(*n*)                 | *O*(*n* log *m*)          |
+| Time     | Worst      | *O*(*n* log *n*) | *O*(*n* log *n*)    | *O*(*n* log *n*)         | *O*(*n* log *n* log *m*)  |
+| Space    | Best       | *O*(1)           | *O*(1)              | *O*(1)                   | *O*(*m*)                  |
+| Space    | Expected   | *O*(*n*/2)       | *O*(log *n*)        | *O*(log *n*)             | *O*(*m*+log *n*)          |
+| Spoce    | Worst      | *O*(*n*/2)       | *O*(log *n*)        | *O*(log *n*)             | *O*(*m*+log *n*)          |
+
 
 [sorting]: https://en.wikipedia.org/wiki/Sorting_algorithm
 [selection]: https://en.wikipedia.org/wiki/Selection_algorithm
@@ -73,7 +77,7 @@ Complexities where *n* is the length of the (sub)view.
 
 ## Roadmap
 
-  * Lower worst-case complexity from *O*(*n* log(*n*)) to *O*(*n*) for selection algorithms.
+  * Lower worst-case time complexity from *O*(*n* log *n*) to *O*(*n*) for selection algorithms.
   * Add `SliceExt` trait for *n*-dimensional array or (sub)view with methods expecting `Axis` as
     their first argument. Comparing methods will always be suffixed with `_by` or `_by_key`
     defining how to compare multi-dimensional elements (e.g., columns) along the provided axis
