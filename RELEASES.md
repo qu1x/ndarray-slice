@@ -1,3 +1,7 @@
+# Version 0.2.1 (2023-04-08)
+
+  * Update docs.
+
 # Version 0.2.0 (2023-04-08)
 
   * Reduce complexity of bulk selection.
