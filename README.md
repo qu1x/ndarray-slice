@@ -87,8 +87,8 @@ See the [release history](RELEASES.md) to keep track of the development.
 
 ## Features
 
-  * `alloc`: Enables stable sort. Enabled by `std`.
-  * `std`: Enables selection of many indices. Enabled by default.
+  * `alloc`: Enables stable `sort`/`sort_by`/`sort_by_key`. Enabled by `std`.
+  * `std`: Enables stable `sort_by_cached_key`. Enabled by default.
 
 # License
 
