@@ -11,34 +11,34 @@ use core::{
 	mem::{self, ManuallyDrop, MaybeUninit},
 	ptr,
 };
-use ndarray::{s, ArrayView1, ArrayViewMut1, Axis, IndexLonger};
+use ndarray::{s, ArrayBase, ArrayView1, ArrayViewMut1, Axis, Data, IndexLonger, Ix1};
 
-#[cfg(feature = "std")]
-use ndarray::{Array1, ArrayBase, Data, Ix1};
-
-#[cfg(feature = "std")]
-pub fn partition_at_indices<'a, T, F, S2>(
+pub fn partition_at_indices<'a, T, E, F, S2>(
 	v: ArrayViewMut1<'a, T>,
+	offset: usize,
 	indices: &ArrayBase<S2, Ix1>,
+	collection: &mut E,
 	is_less: &mut F,
-) -> (
-	Array1<(ArrayViewMut1<'a, T>, &'a mut T)>,
-	ArrayViewMut1<'a, T>,
-)
-where
+) where
+	E: Extend<(usize, &'a mut T)>,
 	F: FnMut(&T, &T) -> bool,
 	S2: Data<Elem = usize>,
 {
-	let mut values = Vec::new();
-	let mut right = v;
-	let mut start = 0;
-	for index in indices {
-		let (left, value, new_right) = partition_at_index(right, *index - start, is_less);
-		values.push((left, value));
-		right = new_right;
-		start = *index + 1;
+	if indices.is_empty() {
+		return;
 	}
-	(values.into(), right)
+	let at = indices.len() / 2;
+	let pivot = indices[at];
+	let (left, value, right) = partition_at_index(v, pivot - offset, is_less);
+	collection.extend([(pivot, value)]);
+	partition_at_indices(left, offset, &indices.slice(s![..at]), collection, is_less);
+	partition_at_indices(
+		right,
+		pivot + 1,
+		&indices.slice(s![at + 1..]),
+		collection,
+		is_less,
+	);
 }
 
 /// Reorder the slice such that the element at `index` is at its final sorted position.
@@ -773,26 +773,19 @@ mod test {
 			return TestResult::discard();
 		}
 		let mut array = arr1(&xs);
+		let mut sorted = arr1(&xs);
+		quick_sort(sorted.view_mut(), &mut u32::lt);
 		let mut indices = arr1(&[xs.len() - 1, xs.len() / 2, xs.len() / 3, xs.len() / 4, 0]);
+		quick_sort(indices.view_mut(), &mut usize::lt);
+		let (indices, _duplicates) = partition_dedup(indices.view_mut(), |a, b| a.eq(&b));
 		if indices.iter().any(|&index| index >= xs.len()) {
 			return TestResult::discard();
 		}
-		quick_sort(indices.view_mut(), &mut usize::lt);
-		let (dedup, _duplicates) = partition_dedup(indices.view_mut(), |a, b| a.eq(&b));
-		let (left_values, right) = partition_at_indices(array.view_mut(), &dedup, &mut u32::lt);
-		let mut last_value = None;
-		for (left, value) in &left_values {
-			for left in left {
-				if let Some(value) = last_value {
-					assert!(value <= *left);
-				}
-				assert!(left <= value);
-			}
-			last_value = Some(**value);
-		}
-		let (_left, value) = left_values.last().unwrap();
-		for right in right {
-			assert!(*value <= right);
+		let mut values = Vec::with_capacity(indices.len());
+		partition_at_indices(array.view_mut(), 0, &indices, &mut values, &mut u32::lt);
+		assert_eq!(indices.len(), values.len());
+		for (index, value) in values {
+			assert_eq!(*value, sorted[index]);
 		}
 		TestResult::passed()
 	}

@@ -36,16 +36,16 @@
 //!
 //! # Current Implementation
 //!
-//! Complexities where *n* is the length of the (sub)view and *m* the number of indices to select.
+//! Complexities where *n* is the length of the (sub)view and *m* the count of indices to select.
 //!
-//! | Resource | Complexity | Sorting (stable) | Sorting (unstable)  | Selection (unstable)     | Multi-Selection (unstable) |
-//! |----------|------------|------------------|---------------------|--------------------------|----------------------------|
-//! | Time     | Best       | *O*(*n*)         | *O*(*n*)            | *O*(*n*)                 | *O*(*mn*)                  |
-//! | Time     | Expected   | *O*(*n* log *n*) | *O*(*n* log *n*)    | *O*(*n*)                 | *O*(*mn*)                  |
-//! | Time     | Worst      | *O*(*n* log *n*) | *O*(*n* log *n*)    | *O*(*n* log *n*)         | *O*(*mn* log *n*)          |
-//! | Space    | Best       | *O*(1)           | *O*(1)              | *O*(1)                   | *O*(*m*)                   |
-//! | Space    | Expected   | *O*(*n*/2)       | *O*(log *n*)        | *O*(log *n*)             | *O*(*m* log *n*)           |
-//! | Spoce    | Worst      | *O*(*n*/2)       | *O*(log *n*)        | *O*(log *n*)             | *O*(*m* log *n*)           |
+//! | Resource | Complexity | Sorting (stable) | Sorting (unstable)  | Selection (unstable)     | Bulk Selection (unstable) |
+//! |----------|------------|------------------|---------------------|--------------------------|---------------------------|
+//! | Time     | Best       | *O*(*n*)         | *O*(*n*)            | *O*(*n*)                 | *O*(*n* log *m*)          |
+//! | Time     | Expected   | *O*(*n* log *n*) | *O*(*n* log *n*)    | *O*(*n*)                 | *O*(*n* log *m*)          |
+//! | Time     | Worst      | *O*(*n* log *n*) | *O*(*n* log *n*)    | *O*(*n* log *n*)         | *O*(*n* log *n* log *m*)  |
+//! | Space    | Best       | *O*(1)           | *O*(1)              | *O*(1)                   | *O*(*m*)                  |
+//! | Space    | Expected   | *O*(*n*/2)       | *O*(log *n*)        | *O*(log *n*)             | *O*(*m*+log *n*)          |
+//! | Spoce    | Worst      | *O*(*n*/2)       | *O*(log *n*)        | *O*(log *n*)             | *O*(*m*+log *n*)          |
 //!
 //!
 //! [sorting]: https://en.wikipedia.org/wiki/Sorting_algorithm
@@ -58,7 +58,7 @@
 //!
 //! # Roadmap
 //!
-//!   * Lower worst-case complexity from *O*(*n* log *n*) to *O*(*n*) for selection algorithms.
+//!   * Lower worst-case time complexity from *O*(*n* log *n*) to *O*(*n*) for selection algorithms.
 //!   * Add `SliceExt` trait for *n*-dimensional array or (sub)view with methods expecting `Axis` as
 //!     their first argument. Comparing methods will always be suffixed with `_by` or `_by_key`
 //!     defining how to compare multi-dimensional elements (e.g., columns) along the provided axis
@@ -86,16 +86,11 @@ mod partition_dedup;
 mod quick_sort;
 mod stable_sort;
 
-#[cfg(feature = "std")]
-use crate::partition::partition_at_indices;
-#[cfg(feature = "std")]
-use ndarray::Array1;
-
 #[cfg(feature = "alloc")]
 use crate::stable_sort::stable_sort;
 
 use crate::{
-	partition::{is_sorted, partition_at_index, reverse},
+	partition::{is_sorted, partition_at_index, partition_at_indices, reverse},
 	partition_dedup::partition_dedup,
 	quick_sort::quick_sort,
 };
@@ -476,17 +471,17 @@ where
 
 	/// Reorder the array such that the elements at `indices` are at their final sorted position.
 	///
-	/// Bulk version of [`select_nth_unstable`] returning the found values and the array views
-	/// containing values less than or equal to a particular found value in an allocated `Array1`
-	/// while the array view containing the values greater than or equal to the last found value
-	/// is returned as the right half of the outer tuple. The provided `indices` must be sorted and
-	/// unique which can be achieved with [`sort_unstable`] followed by [`partition_dedup`].
+	/// Bulk version of [`select_nth_unstable`] extending `collection` with `(index, &mut element)`
+	/// tuples. The order of extending the `collection` is not specified but deterministic. The
+	/// provided `indices` must be sorted and unique which can be achieved with [`sort_unstable`]
+	/// followed by [`partition_dedup`].
 	///
 	/// # Current Implementation
 	///
-	/// The current algorithm invokes [`select_nth_unstable`] for one index after another where
-	/// consecutive invocations only have to search in the array view containing values greater than
-	/// or equal to the previously found value.
+	/// The current algorithm chooses `indices.len() / 2` as pivot and recurses into its left and
+	/// right subviews with corresponding left and right subviews of `self` (i.e., `..at` and
+	/// `at + 1..`). Requiring `indices` to be already sorted, reduces the time complexity in the
+	/// length *m* of `indices` from *O*(*m*) to *O*(log *m*).
 	///
 	/// # Panics
 	///
@@ -501,41 +496,42 @@ where
 	///
 	/// ```
 	/// use ndarray_slice::{ndarray::arr1, Slice1Ext};
+	/// use std::collections::HashMap;
 	///
 	/// let mut v = arr1(&[-5i32, 4, 1, -3, 2, 9, 3, 4, 0]);
 	///
 	/// // Find values at following indices.
 	/// let indices = arr1(&[1, 4, 6]);
 	///
-	/// let (left_values, right) = v.select_many_nth_unstable(&indices);
-	/// let values = left_values.map(|(_left, value)| **value);
+	/// let mut map = HashMap::new();
+	/// v.select_many_nth_unstable(&indices, &mut map);
+	/// let values = indices.map(|index| *map[index]);
 	///
 	/// assert!(values == arr1(&[-3, 2, 4]));
 	/// ```
-	#[cfg(feature = "std")]
-	#[must_use]
-	fn select_many_nth_unstable<S2>(
-		&mut self,
+	fn select_many_nth_unstable<'a, E, S2>(
+		&'a mut self,
 		indices: &ArrayBase<S2, Ix1>,
-	) -> (Array1<(ArrayViewMut1<'_, A>, &mut A)>, ArrayViewMut1<'_, A>)
-	where
-		A: Ord,
+		collection: &mut E,
+	) where
+		A: Ord + 'a,
+		E: Extend<(usize, &'a mut A)>,
 		S: DataMut,
 		S2: Data<Elem = usize>;
 	/// Reorder the array with a comparator function such that the elements at `indices` are at
 	/// their final sorted position.
 	///
-	/// Bulk version of [`select_nth_unstable_by`] returning the found values and the array views
-	/// containing values less than or equal to a particular found value in an allocated `Array1`
-	/// while the array view containing the values greater than or equal to the last found value
-	/// is returned as the right half of the outer tuple. The provided `indices` must be sorted and
-	/// unique which can be achieved with [`sort_unstable`] followed by [`partition_dedup`].
+	/// Bulk version of [`select_nth_unstable_by`] extending `collection` with `(index, &mut element)`
+	/// tuples. The order of extending the `collection` is not specified but deterministic. The
+	/// provided `indices` must be sorted and unique which can be achieved with [`sort_unstable`]
+	/// followed by [`partition_dedup`].
 	///
 	/// # Current Implementation
 	///
-	/// The current algorithm invokes [`select_nth_unstable_by`] for one index after another where
-	/// consecutive invocations only have to search in the array view containing values greater than
-	/// or equal to the previously found value.
+	/// The current algorithm chooses `indices.len() / 2` as pivot and recurses into its left and
+	/// right subviews with corresponding left and right subviews of `self` (i.e., `..at` and
+	/// `at + 1..`). Requiring `indices` to be already sorted, reduces the time complexity in the
+	/// length *m* of `indices` from *O*(*m*) to *O*(log *m*).
 	///
 	/// # Panics
 	///
@@ -550,42 +546,44 @@ where
 	///
 	/// ```
 	/// use ndarray_slice::{ndarray::arr1, Slice1Ext};
+	/// use std::collections::HashMap;
 	///
 	/// let mut v = arr1(&[-5i32, 4, 1, -3, 2, 9, 3, 4, 0]);
 	///
 	/// // Find values at following indices.
 	/// let indices = arr1(&[1, 4, 6]);
 	///
-	/// let (left_values, right) = v.select_many_nth_unstable_by(&indices, |a, b| b.cmp(a));
-	/// let values = left_values.map(|(_left, value)| **value);
+	/// let mut map = HashMap::new();
+	/// v.select_many_nth_unstable_by(&indices, &mut map, |a, b| b.cmp(a));
+	/// let values = indices.map(|index| *map[index]);
 	///
 	/// assert!(values == arr1(&[4, 2, 0]));
 	/// ```
-	#[cfg(feature = "std")]
-	#[must_use]
-	fn select_many_nth_unstable_by<F, S2>(
-		&mut self,
+	fn select_many_nth_unstable_by<'a, E, F, S2>(
+		&'a mut self,
 		indices: &ArrayBase<S2, Ix1>,
+		collection: &mut E,
 		compare: F,
-	) -> (Array1<(ArrayViewMut1<'_, A>, &mut A)>, ArrayViewMut1<'_, A>)
-	where
+	) where
+		A: 'a,
+		E: Extend<(usize, &'a mut A)>,
 		F: FnMut(&A, &A) -> Ordering,
 		S: DataMut,
 		S2: Data<Elem = usize>;
 	/// Reorder the array with a key extraction function such that the elements at `indices` are at
 	/// their final sorted position.
 	///
-	/// Bulk version of [`select_nth_unstable_by_key`] returning the found values and the array views
-	/// containing values less than or equal to a particular found value in an allocated `Array1`
-	/// while the array view containing the values greater than or equal to the last found value
-	/// is returned as the right half of the outer tuple. The provided `indices` must be sorted and
-	/// unique which can be achieved with [`sort_unstable`] followed by [`partition_dedup`].
+	/// Bulk version of [`select_nth_unstable_by_key`] extending `collection` with `(index, &mut element)`
+	/// tuples. The order of extending the `collection` is not specified but deterministic. The
+	/// provided `indices` must be sorted and unique which can be achieved with [`sort_unstable`]
+	/// followed by [`partition_dedup`].
 	///
 	/// # Current Implementation
 	///
-	/// The current algorithm invokes [`select_nth_unstable_by_key`] for one index after another where
-	/// consecutive invocations only have to search in the array view containing values greater than
-	/// or equal to the previously found value.
+	/// The current algorithm chooses `indices.len() / 2` as pivot and recurses into its left and
+	/// right subviews with corresponding left and right subviews of `self` (i.e., `..at` and
+	/// `at + 1..`). Requiring `indices` to be already sorted, reduces the time complexity in the
+	/// length *m* of `indices` from *O*(*m*) to *O*(log *m*).
 	///
 	/// # Panics
 	///
@@ -600,25 +598,27 @@ where
 	///
 	/// ```
 	/// use ndarray_slice::{ndarray::arr1, Slice1Ext};
+	/// use std::collections::HashMap;
 	///
 	/// let mut v = arr1(&[-5i32, 4, 1, -3, 2, 9, 3, 4, 0]);
 	///
 	/// // Find values at following indices.
 	/// let indices = arr1(&[1, 4, 6]);
 	///
-	/// let (left_values, right) = v.select_many_nth_unstable_by_key(&indices, |&a| a.abs());
-	/// let values = left_values.map(|(_left, value)| **value);
+	/// let mut map = HashMap::new();
+	/// v.select_many_nth_unstable_by_key(&indices, &mut map, |&a| a.abs());
+	/// let values = indices.map(|index| *map[index]);
 	///
 	/// assert!(values == arr1(&[1, 3, 4]));
 	/// ```
-	#[cfg(feature = "std")]
-	#[must_use]
-	fn select_many_nth_unstable_by_key<K, F, S2>(
-		&mut self,
+	fn select_many_nth_unstable_by_key<'a, E, K, F, S2>(
+		&'a mut self,
 		indices: &ArrayBase<S2, Ix1>,
+		collection: &mut E,
 		f: F,
-	) -> (Array1<(ArrayViewMut1<'_, A>, &mut A)>, ArrayViewMut1<'_, A>)
-	where
+	) where
+		A: 'a,
+		E: Extend<(usize, &'a mut A)>,
 		K: Ord,
 		F: FnMut(&A) -> K,
 		S: DataMut,
@@ -1299,49 +1299,61 @@ where
 		is_sorted(self.view(), |a, b| f(a).partial_cmp(&f(b)))
 	}
 
-	#[cfg(feature = "std")]
 	#[inline]
-	fn select_many_nth_unstable<S2>(
-		&mut self,
+	fn select_many_nth_unstable<'a, E, S2>(
+		&'a mut self,
 		indices: &ArrayBase<S2, Ix1>,
-	) -> (Array1<(ArrayViewMut1<'_, A>, &mut A)>, ArrayViewMut1<'_, A>)
-	where
-		A: Ord,
+		collection: &mut E,
+	) where
+		A: Ord + 'a,
+		E: Extend<(usize, &'a mut A)>,
 		S: DataMut,
 		S2: Data<Elem = usize>,
 	{
-		partition_at_indices(self.view_mut(), indices, &mut A::lt)
+		partition_at_indices(self.view_mut(), 0, indices, collection, &mut A::lt);
 	}
-	#[cfg(feature = "std")]
 	#[inline]
-	fn select_many_nth_unstable_by<F, S2>(
-		&mut self,
+	fn select_many_nth_unstable_by<'a, E, F, S2>(
+		&'a mut self,
 		indices: &ArrayBase<S2, Ix1>,
+		collection: &mut E,
 		mut compare: F,
-	) -> (Array1<(ArrayViewMut1<'_, A>, &mut A)>, ArrayViewMut1<'_, A>)
-	where
+	) where
+		A: 'a,
+		E: Extend<(usize, &'a mut A)>,
 		F: FnMut(&A, &A) -> Ordering,
 		S: DataMut,
 		S2: Data<Elem = usize>,
 	{
-		partition_at_indices(self.view_mut(), indices, &mut |a: &A, b: &A| {
-			compare(a, b) == Less
-		})
+		partition_at_indices(
+			self.view_mut(),
+			0,
+			indices,
+			collection,
+			&mut |a: &A, b: &A| compare(a, b) == Less,
+		);
 	}
-	#[cfg(feature = "std")]
 	#[inline]
-	fn select_many_nth_unstable_by_key<K, F, S2>(
-		&mut self,
+	fn select_many_nth_unstable_by_key<'a, E, K, F, S2>(
+		&'a mut self,
 		indices: &ArrayBase<S2, Ix1>,
+		collection: &mut E,
 		mut f: F,
-	) -> (Array1<(ArrayViewMut1<'_, A>, &mut A)>, ArrayViewMut1<'_, A>)
-	where
+	) where
+		A: 'a,
+		E: Extend<(usize, &'a mut A)>,
 		K: Ord,
 		F: FnMut(&A) -> K,
 		S: DataMut,
 		S2: Data<Elem = usize>,
 	{
-		partition_at_indices(self.view_mut(), indices, &mut |a: &A, b: &A| f(a).lt(&f(b)))
+		partition_at_indices(
+			self.view_mut(),
+			0,
+			indices,
+			collection,
+			&mut |a: &A, b: &A| f(a).lt(&f(b)),
+		);
 	}
 
 	#[inline]
