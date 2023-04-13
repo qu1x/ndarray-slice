@@ -1,3 +1,9 @@
+# Version 0.2.2 (2023-04-13)
+
+  * Add `rayon` feature for parallel sorting and parallel bulk-selection.
+  * Guarantee that bulk-selected elements are in the order of their indices.
+  * Half recursive branching of bulk-selection via tail call elimination.
+
 # Version 0.2.1 (2023-04-08)
 
   * Update docs.

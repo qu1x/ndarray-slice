@@ -2,38 +2,59 @@
 //!
 //! [`core::slice::sort`]: https://doc.rust-lang.org/src/core/slice/sort.rs.html
 
-use crate::{heap_sort::heap_sort, insertion_sort::insertion_sort};
+use crate::{
+	par::{heap_sort::heap_sort, insertion_sort::insertion_sort},
+	partition::{break_patterns, reverse},
+};
 use core::{
 	cmp::{
 		self,
-		Ordering::{self, Equal, Greater, Less},
+		Ordering::{Equal, Greater, Less},
 	},
 	mem::{self, ManuallyDrop, MaybeUninit},
 	ptr,
 };
 use ndarray::{s, ArrayView1, ArrayViewMut1, Axis, IndexLonger};
 
-pub fn partition_at_indices<'a, T, E, F>(
+pub fn par_partition_at_indices<'a, T, F>(
 	mut v: ArrayViewMut1<'a, T>,
 	mut offset: usize,
 	mut indices: ArrayView1<usize>,
-	collection: &mut E,
-	is_less: &mut F,
+	mut values: &mut [MaybeUninit<&'a mut T>],
+	is_less: &F,
 ) where
-	E: Extend<(usize, &'a mut T)>,
-	F: FnMut(&T, &T) -> bool,
+	T: Send,
+	F: Fn(&T, &T) -> bool + Sync,
 {
+	// If both partitions are up to this length, we continue sequentially. This number is as small
+	// as possible but so that the overhead of Rayon's task scheduling is still negligible.
+	const MAX_SEQUENTIAL: usize = 2000;
+
 	while !indices.is_empty() {
 		let at = indices.len() / 2;
+
 		let (left_indices, right_indices) = indices.split_at(Axis(0), at);
 		let (index, right_indices) = right_indices.split_at(Axis(0), 1);
 		let pivot = *index.index(0);
+
 		let (left, value, right) = partition_at_index(v, pivot - offset, is_less);
-		partition_at_indices(left, offset, left_indices, collection, is_less);
-		collection.extend([(pivot, value)]);
-		v = right;
-		offset = pivot + 1;
-		indices = right_indices;
+		values[at].write(value);
+
+		let (left_values, right_values) = values.split_at_mut(at);
+		let right_values = &mut right_values[1..];
+		if at == 0 || pivot - offset <= MAX_SEQUENTIAL {
+			par_partition_at_indices(left, offset, left_indices, left_values, is_less);
+			v = right;
+			offset = pivot + 1;
+			indices = right_indices;
+			values = right_values;
+		} else {
+			rayon::join(
+				|| par_partition_at_indices(left, offset, left_indices, left_values, is_less),
+				|| par_partition_at_indices(right, pivot + 1, right_indices, right_values, is_less),
+			);
+			break;
+		}
 	}
 }
 
@@ -41,10 +62,10 @@ pub fn partition_at_indices<'a, T, E, F>(
 pub fn partition_at_index<'a, T, F>(
 	mut v: ArrayViewMut1<'a, T>,
 	index: usize,
-	is_less: &mut F,
+	is_less: &F,
 ) -> (ArrayViewMut1<'a, T>, &'a mut T, ArrayViewMut1<'a, T>)
 where
-	F: FnMut(&T, &T) -> bool,
+	F: Fn(&T, &T) -> bool,
 {
 	if index >= v.len() {
 		panic!(
@@ -86,10 +107,10 @@ where
 fn partition_at_index_loop<'a, T, F>(
 	mut v: ArrayViewMut1<'a, T>,
 	mut index: usize,
-	is_less: &mut F,
+	is_less: &F,
 	mut pred: Option<&'a T>,
 ) where
-	F: FnMut(&T, &T) -> bool,
+	F: Fn(&T, &T) -> bool,
 {
 	// Limit the amount of iterations and fall back to heapsort, similarly to `slice::sort_unstable`.
 	// This lowers the worst case running time from O(n^2) to O(n log n).
@@ -170,9 +191,9 @@ fn partition_at_index_loop<'a, T, F>(
 ///
 /// Returns the number of elements equal to the pivot. It is assumed that `v` does not contain
 /// elements smaller than the pivot.
-pub fn partition_equal<T, F>(mut v: ArrayViewMut1<'_, T>, pivot: usize, is_less: &mut F) -> usize
+pub fn partition_equal<T, F>(mut v: ArrayViewMut1<'_, T>, pivot: usize, is_less: &F) -> usize
 where
-	F: FnMut(&T, &T) -> bool,
+	F: Fn(&T, &T) -> bool,
 {
 	// Place the pivot at the beginning of slice.
 	v.swap(0, pivot);
@@ -233,9 +254,9 @@ where
 ///
 /// 1. Number of elements smaller than `v[pivot]`.
 /// 2. True if `v` was already partitioned.
-pub fn partition<T, F>(mut v: ArrayViewMut1<'_, T>, pivot: usize, is_less: &mut F) -> (usize, bool)
+pub fn partition<T, F>(mut v: ArrayViewMut1<'_, T>, pivot: usize, is_less: &F) -> (usize, bool)
 where
-	F: FnMut(&T, &T) -> bool,
+	F: Fn(&T, &T) -> bool,
 {
 	let (mid, was_partitioned) = {
 		let mut v = v.view_mut();
@@ -300,9 +321,9 @@ where
 /// This idea is presented in the [BlockQuicksort][pdf] paper.
 ///
 /// [pdf]: https://drops.dagstuhl.de/opus/volltexte/2016/6389/pdf/LIPIcs-ESA-2016-38.pdf
-fn partition_in_blocks<T, F>(mut v: ArrayViewMut1<'_, T>, pivot: &T, is_less: &mut F) -> usize
+fn partition_in_blocks<T, F>(mut v: ArrayViewMut1<'_, T>, pivot: &T, is_less: &F) -> usize
 where
-	F: FnMut(&T, &T) -> bool,
+	F: Fn(&T, &T) -> bool,
 {
 	if v.is_empty() {
 		return 0;
@@ -579,97 +600,12 @@ where
 	}
 }
 
-pub fn is_sorted<T, F>(v: ArrayView1<'_, T>, mut compare: F) -> bool
-where
-	F: FnMut(&T, &T) -> Option<Ordering>,
-{
-	for i in 1..v.len() {
-		let [a, b] = [&v[i - 1], &v[i]];
-		if !compare(a, b).map_or(false, Ordering::is_le) {
-			return false;
-		}
-	}
-	true
-}
-
-pub fn reverse<T>(v: ArrayViewMut1<'_, T>) {
-	let len = v.len();
-	let half_len = v.len() / 2;
-
-	// These slices will skip the middle item for an odd length,
-	// since that one doesn't need to move.
-	let (front_half, back_half) = v.split_at(Axis(0), len - half_len);
-	let (front_half, _middle_item) = front_half.split_at(Axis(0), half_len);
-
-	// Introducing a function boundary here means that the two halves
-	// get `noalias` markers, allowing better optimization as LLVM
-	// knows that they're disjoint, unlike in the original slice.
-	revswap(front_half, back_half, half_len);
-
-	#[inline]
-	fn revswap<T>(mut a: ArrayViewMut1<'_, T>, mut b: ArrayViewMut1<'_, T>, n: usize) {
-		debug_assert!(a.len() == n);
-		debug_assert!(b.len() == n);
-
-		let mut i = 0;
-		while i < n {
-			mem::swap(a.view_mut().index(i), b.view_mut().index(n - 1 - i));
-			i += 1;
-		}
-	}
-}
-
-/// Scatters some elements around in an attempt to break patterns that might cause imbalanced
-/// partitions in quicksort.
-#[cold]
-pub fn break_patterns<T>(mut v: ArrayViewMut1<'_, T>) {
-	let len = v.len();
-	if len >= 8 {
-		// Pseudorandom number generator from the "Xorshift RNGs" paper by George Marsaglia.
-		let mut random = len as u32;
-		let mut gen_u32 = || {
-			random ^= random << 13;
-			random ^= random >> 17;
-			random ^= random << 5;
-			random
-		};
-		let mut gen_usize = || {
-			if usize::BITS <= 32 {
-				gen_u32() as usize
-			} else {
-				(((gen_u32() as u64) << 32) | (gen_u32() as u64)) as usize
-			}
-		};
-
-		// Take random numbers modulo this number.
-		// The number fits into `usize` because `len` is not greater than `isize::MAX`.
-		let modulus = len.next_power_of_two();
-
-		// Some pivot candidates will be in the nearby of this index. Let's randomize them.
-		let pos = len / 4 * 2;
-
-		for i in 0..3 {
-			// Generate a random number modulo `len`. However, in order to avoid costly operations
-			// we first take it modulo a power of two, and then decrease by `len` until it fits
-			// into the range `[0, len - 1]`.
-			let mut other = gen_usize() & (modulus - 1);
-
-			// `other` is guaranteed to be less than `2 * len`.
-			if other >= len {
-				other -= len;
-			}
-
-			v.swap(pos - 1 + i, other);
-		}
-	}
-}
-
 /// Chooses a pivot in `v` and returns the index and `true` if the slice is likely already sorted.
 ///
 /// Elements in `v` might be reordered in the process.
-pub fn choose_pivot<T, F>(v: ArrayViewMut1<'_, T>, is_less: &mut F) -> (usize, bool)
+pub fn choose_pivot<T, F>(v: ArrayViewMut1<'_, T>, is_less: &F) -> (usize, bool)
 where
-	F: FnMut(&T, &T) -> bool,
+	F: Fn(&T, &T) -> bool,
 {
 	// Minimum length to choose the median-of-medians method.
 	// Shorter slices use the simple median-of-three method.
@@ -754,15 +690,15 @@ impl<T> Drop for CopyOnDrop<T> {
 	}
 }
 
-#[cfg(feature = "std")]
 #[cfg(test)]
 mod test {
-	use super::{partition_at_index, partition_at_indices, reverse};
-	use crate::{partition_dedup::partition_dedup, quick_sort::quick_sort};
-	use ndarray::{arr1, Array1};
+	use super::{par_partition_at_indices, partition_at_index};
+	use crate::{par::quick_sort::par_quick_sort, partition_dedup::partition_dedup};
+	use ndarray::arr1;
 	use quickcheck::TestResult;
 	use quickcheck_macros::quickcheck;
 
+	#[cfg_attr(miri, ignore)]
 	#[quickcheck]
 	fn at_indices(xs: Vec<u32>) -> TestResult {
 		if xs.is_empty() {
@@ -770,27 +706,20 @@ mod test {
 		}
 		let mut array = arr1(&xs);
 		let mut sorted = arr1(&xs);
-		quick_sort(sorted.view_mut(), &mut u32::lt);
+		par_quick_sort(sorted.view_mut(), u32::lt);
 		let mut indices = arr1(&[xs.len() - 1, xs.len() / 2, xs.len() / 3, xs.len() / 4, 0]);
-		quick_sort(indices.view_mut(), &mut usize::lt);
+		par_quick_sort(indices.view_mut(), usize::lt);
 		let (indices, _duplicates) = partition_dedup(indices.view_mut(), |a, b| a.eq(&b));
 		if indices.iter().any(|&index| index >= xs.len()) {
 			return TestResult::discard();
 		}
-		let mut values = Vec::with_capacity(indices.len());
-		partition_at_indices(
-			array.view_mut(),
-			0,
-			indices.view(),
-			&mut values,
-			&mut u32::lt,
-		);
-		assert_eq!(
-			indices,
-			Array1::from_iter(values.iter().map(|(index, _value)| *index))
-		);
-		for (index, value) in values {
-			assert_eq!(*value, sorted[index]);
+		let mut collection = Vec::with_capacity(indices.len());
+		let values = collection.spare_capacity_mut();
+		assert_eq!(indices.len(), values.len());
+		par_partition_at_indices(array.view_mut(), 0, indices.view(), values, &u32::lt);
+		unsafe { collection.set_len(collection.len() + indices.len()) };
+		for (index, value) in indices.into_iter().zip(collection.into_iter()) {
+			assert_eq!(*value, sorted[*index]);
 		}
 		TestResult::passed()
 	}
@@ -801,7 +730,7 @@ mod test {
 			return TestResult::discard();
 		}
 		let mut array = arr1(&xs);
-		let (left, value, right) = partition_at_index(array.view_mut(), xs.len() / 3, &mut u32::lt);
+		let (left, value, right) = partition_at_index(array.view_mut(), xs.len() / 3, &u32::lt);
 		for left in left {
 			assert!(left <= value);
 		}
@@ -809,16 +738,5 @@ mod test {
 			assert!(value <= right);
 		}
 		TestResult::passed()
-	}
-
-	#[quickcheck]
-	fn reversed(xs: Vec<u32>) -> bool {
-		let array = Array1::from_vec(xs);
-		let mut array_rev = array.clone();
-		reverse(array_rev.view_mut());
-		array
-			.iter()
-			.zip(array_rev.iter().rev())
-			.all(|(a, b)| a == b)
 	}
 }

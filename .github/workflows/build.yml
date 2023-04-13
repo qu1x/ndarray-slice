@@ -14,7 +14,7 @@ jobs:
     - name: toolchain
       uses: actions-rs/toolchain@v1
       with:
-        toolchain: 1.58.0
+        toolchain: 1.60.0
         profile: minimal
         components: rustfmt, rust-docs, clippy
         override: true
@@ -32,6 +32,16 @@ jobs:
       with:
         command: test
         args: --no-default-features
+    - name: test-rayon
+      uses: actions-rs/cargo@v1
+      with:
+        command: test
+        args: --features rayon --
+          par::merge_sort::test::stably_sorted
+          par::quick_sort::test::sorted
+          par::partition::test::at_indices
+      env:
+        QUICKCHECK_GENERATOR_SIZE: 1000000
     - name: clippy
       uses: actions-rs/cargo@v1
       with:
@@ -51,6 +61,11 @@ jobs:
       with:
         command: doc
         args: --no-default-features
+    - name: doc-rayon
+      uses: actions-rs/cargo@v1
+      with:
+        command: doc
+        args: --features rayon
     - name: fmt
       uses: actions-rs/cargo@v1
       with:
@@ -82,6 +97,16 @@ jobs:
       with:
         command: test
         args: --no-default-features
+    - name: test-rayon
+      uses: actions-rs/cargo@v1
+      with:
+        command: test
+        args: --features rayon --
+          par::merge_sort::test::stably_sorted
+          par::quick_sort::test::sorted
+          par::partition::test::at_indices
+      env:
+        QUICKCHECK_GENERATOR_SIZE: 1000000
     - name: clippy
       uses: actions-rs/cargo@v1
       with:
@@ -107,6 +132,13 @@ jobs:
         args: --no-default-features
       env:
         RUSTDOCFLAGS: "--cfg docsrs"
+    - name: doc-rayon
+      uses: actions-rs/cargo@v1
+      with:
+        command: doc
+        args: --features rayon
+      env:
+        RUSTDOCFLAGS: "--cfg docsrs"
     - name: fmt
       uses: actions-rs/cargo@v1
       with:
@@ -116,5 +148,4 @@ jobs:
       uses: actions-rs/cargo@v1
       with:
         command: miri
-        args: test
-      if: ${{ false }}
+        args: test -- Slice1Ext

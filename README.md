@@ -15,10 +15,11 @@
 [License]: https://img.shields.io/badge/License-MIT%20OR%20Apache--2.0-blue.svg
 
 Fast and robust slice-based algorithms (e.g., [sorting], [selection], [search]) for
-non-contiguous (sub)views into *n*-dimensional arrays. Reimplements algorithms in [`slice`] for
-[`ndarray`] with arbitrary memory layout (e.g., non-contiguous).
+non-contiguous (sub)views into *n*-dimensional arrays. Reimplements algorithms in [`slice`] and
+[`rayon::slice`] for [`ndarray`] with arbitrary memory layout (e.g., non-contiguous).
 
 [`slice`]: https://doc.rust-lang.org/std/primitive.slice.html
+[`rayon::slice`]: https://docs.rs/rayon/latest/rayon/slice/index.html
 [`ndarray`]: https://docs.rs/ndarray
 
 ## Example
@@ -38,11 +39,12 @@ let mut v = arr2(&[[-5, 4, 1, -3,  2],   // row 0, axis 0
 // Mutable subview into the last column.
 let mut column = v.column_mut(4);
 
-// Due to row-major memory layout, columns are non-contiguous and hence cannot be sorted by
-// viewing them as mutable slices.
+// Due to row-major memory layout, columns are non-contiguous
+// and hence cannot be sorted by viewing them as mutable slices.
 assert_eq!(column.as_slice_mut(), None);
 
-// Instead, sorting is specifically implemented for non-contiguous mutable (sub)views.
+// Instead, sorting is specifically implemented for non-contiguous
+//  mutable (sub)views.
 column.sort_unstable();
 
 assert!(v == arr2(&[[-5, 4, 1, -3, -1],
@@ -87,8 +89,9 @@ See the [release history](RELEASES.md) to keep track of the development.
 
 ## Features
 
-  * `alloc`: Enables stable `sort`/`sort_by`/`sort_by_key`. Enabled by `std`.
-  * `std`: Enables stable `sort_by_cached_key`. Enabled by default.
+  * `alloc` for stable `sort`/`sort_by`/`sort_by_key`. Enabled by `std`.
+  * `std` for stable `sort_by_cached_key`. Enabled by `default` or `rayon`.
+  * `rayon` for parallel `par_sort*`/`par_select_many_nth_unstable*`.
 
 # License
 

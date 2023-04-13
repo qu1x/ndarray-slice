@@ -1,6 +1,8 @@
 //! Fast and robust slice-based algorithms (e.g., [sorting], [selection], [search]) for
-//! non-contiguous (sub)views into *n*-dimensional arrays. Reimplements algorithms in [`slice`] for
-//! [`ndarray`] with arbitrary memory layout (e.g., non-contiguous).
+//! non-contiguous (sub)views into *n*-dimensional arrays. Reimplements algorithms in [`slice`] and
+#![cfg_attr(feature = "rayon", doc = "[`rayon::slice`]")]
+#![cfg_attr(not(feature = "rayon"), doc = "`rayon::slice`")]
+//! for [`ndarray`] with arbitrary memory layout (e.g., non-contiguous).
 //!
 //! # Example
 //!
@@ -19,11 +21,12 @@
 //! // Mutable subview into the last column.
 //! let mut column = v.column_mut(4);
 //!
-//! // Due to row-major memory layout, columns are non-contiguous and hence cannot be sorted by
-//! // viewing them as mutable slices.
+//! // Due to row-major memory layout, columns are non-contiguous
+//! // and hence cannot be sorted by viewing them as mutable slices.
 //! assert_eq!(column.as_slice_mut(), None);
 //!
-//! // Instead, sorting is specifically implemented for non-contiguous mutable (sub)views.
+//! // Instead, sorting is specifically implemented for non-contiguous
+//! // mutable (sub)views.
 //! column.sort_unstable();
 //!
 //! assert!(v == arr2(&[[-5, 4, 1, -3, -1],
@@ -66,8 +69,9 @@
 //!
 //! # Features
 //!
-//!   * `alloc`: Enables stable `sort`/`sort_by`/`sort_by_key`. Enabled by `std`.
-//!   * `std`: Enables stable `sort_by_cached_key`. Enabled by default.
+//!   * `alloc` for stable `sort`/`sort_by`/`sort_by_key`. Enabled by `std`.
+//!   * `std` for stable `sort_by_cached_key`. Enabled by `default` or `rayon`.
+//!   * `rayon` for parallel `par_sort*`/`par_select_many_nth_unstable*`.
 
 #![deny(
 	missing_docs,
@@ -85,6 +89,13 @@ mod partition;
 mod partition_dedup;
 mod quick_sort;
 mod stable_sort;
+
+#[cfg(feature = "rayon")]
+mod par;
+#[cfg(feature = "rayon")]
+use par::{
+	merge_sort::par_merge_sort, partition::par_partition_at_indices, quick_sort::par_quick_sort,
+};
 
 #[cfg(feature = "alloc")]
 use crate::stable_sort::stable_sort;
@@ -105,7 +116,9 @@ pub use ndarray;
 
 /// Extension trait for 1-dimensional [`ArrayBase<S, Ix1>`](`ArrayBase`) array or (sub)view with
 /// arbitrary memory layout (e.g., non-contiguous) providing methods (e.g., [sorting], [selection],
-/// [search]) similar to [`slice`].
+/// [search]) similar to [`slice`] and
+#[cfg_attr(feature = "rayon", doc = "[`rayon::slice`].")]
+#[cfg_attr(not(feature = "rayon"), doc = "`rayon::slice`.")]
 ///
 /// [sorting]: https://en.wikipedia.org/wiki/Sorting_algorithm
 /// [selection]: https://en.wikipedia.org/wiki/Selection_algorithm
@@ -114,6 +127,201 @@ pub trait Slice1Ext<A, S>
 where
 	S: Data<Elem = A>,
 {
+	/// Sorts the array in parallel.
+	///
+	/// This sort is stable (i.e., does not reorder equal elements) and *O*(*n* log *n*) worst-case.
+	///
+	/// When applicable, unstable sorting is preferred because it is generally faster than stable
+	/// sorting and it doesn't allocate auxiliary memory.
+	/// See [`par_sort_unstable`](Slice1Ext::par_sort_unstable).
+	///
+	/// # Current Implementation
+	///
+	/// The current algorithm is an adaptive, iterative merge sort inspired by
+	/// [timsort](https://en.wikipedia.org/wiki/Timsort).
+	/// It is designed to be very fast in cases where the array is nearly sorted, or consists of
+	/// two or more sorted sequences concatenated one after another.
+	///
+	/// Also, it allocates temporary storage half the size of `self`, but for short arrays a
+	/// non-allocating insertion sort is used instead.
+	///
+	/// In order to sort the array in parallel, the array is first divided into smaller chunks and
+	/// all chunks are sorted in parallel. Then, adjacent chunks that together form non-descending
+	/// or descending runs are concatenated. Finally, the remaining chunks are merged together using
+	/// parallel subdivision of chunks and parallel merge operation.
+	///
+	/// # Examples
+	///
+	/// ```
+	/// use ndarray_slice::{ndarray::arr1, Slice1Ext};
+	///
+	/// let mut v = arr1(&[-5, 4, 1, -3, 2]);
+	///
+	/// v.par_sort();
+	/// assert!(v == arr1(&[-5, -3, 1, 2, 4]));
+	/// ```
+	#[cfg(feature = "rayon")]
+	fn par_sort(&mut self)
+	where
+		A: Ord + Send,
+		S: DataMut;
+	/// Sorts the array in parallel with a comparator function.
+	///
+	/// This sort is stable (i.e., does not reorder equal elements) and *O*(*n* log *n*) worst-case.
+	///
+	/// The comparator function must define a total ordering for the elements in the array. If
+	/// the ordering is not total, the order of the elements is unspecified. An order is a
+	/// total order if it is (for all `a`, `b` and `c`):
+	///
+	/// * total and antisymmetric: exactly one of `a < b`, `a == b` or `a > b` is true, and
+	/// * transitive, `a < b` and `b < c` implies `a < c`. The same must hold for both `==` and `>`.
+	///
+	/// For example, while [`f64`] doesn't implement [`Ord`] because `NaN != NaN`, we can use
+	/// `partial_cmp` as our sort function when we know the array doesn't contain a `NaN`.
+	///
+	/// ```
+	/// use ndarray_slice::{ndarray::arr1, Slice1Ext};
+	///
+	/// let mut floats = arr1(&[5f64, 4.0, 1.0, 3.0, 2.0]);
+	/// floats.par_sort_by(|a, b| a.partial_cmp(b).unwrap());
+	/// assert_eq!(floats, arr1(&[1.0, 2.0, 3.0, 4.0, 5.0]));
+	/// ```
+	///
+	/// When applicable, unstable sorting is preferred because it is generally faster than stable
+	/// sorting and it doesn't allocate auxiliary memory.
+	/// See [`par_sort_unstable_by`](Slice1Ext::par_sort_unstable_by).
+	///
+	/// # Current Implementation
+	///
+	/// The current algorithm is an adaptive, iterative merge sort inspired by
+	/// [timsort](https://en.wikipedia.org/wiki/Timsort).
+	/// It is designed to be very fast in cases where the array is nearly sorted, or consists of
+	/// two or more sorted sequences concatenated one after another.
+	///
+	/// Also, it allocates temporary storage half the size of `self`, but for short arrays a
+	/// non-allocating insertion sort is used instead.
+	///
+	/// In order to sort the array in parallel, the array is first divided into smaller chunks and
+	/// all chunks are sorted in parallel. Then, adjacent chunks that together form non-descending
+	/// or descending runs are concatenated. Finally, the remaining chunks are merged together using
+	/// parallel subdivision of chunks and parallel merge operation.
+	///
+	/// # Examples
+	///
+	/// ```
+	/// use ndarray_slice::{ndarray::arr1, Slice1Ext};
+	///
+	/// let mut v = arr1(&[5, 4, 1, 3, 2]);
+	/// v.par_sort_by(|a, b| a.cmp(b));
+	/// assert!(v == arr1(&[1, 2, 3, 4, 5]));
+	///
+	/// // reverse sorting
+	/// v.par_sort_by(|a, b| b.cmp(a));
+	/// assert!(v == arr1(&[5, 4, 3, 2, 1]));
+	/// ```
+	#[cfg(feature = "rayon")]
+	fn par_sort_by<F>(&mut self, compare: F)
+	where
+		A: Send,
+		F: Fn(&A, &A) -> Ordering + Sync,
+		S: DataMut;
+	/// Sorts the array in parallel with a key extraction function.
+	///
+	/// This sort is stable (i.e., does not reorder equal elements) and *O*(*mn* log *n*)
+	/// worst-case, where the key function is *O*(*m*).
+	///
+	/// For expensive key functions (e.g. functions that are not simple property accesses or
+	/// basic operations), [`par_sort_by_cached_key`](Slice1Ext::par_sort_by_cached_key) is likely to be
+	/// significantly faster, as it does not recompute element keys."
+	///
+	/// When applicable, unstable sorting is preferred because it is generally faster than stable
+	/// sorting and it doesn't allocate auxiliary memory.
+	/// See [`par_sort_unstable_by_key`](Slice1Ext::par_sort_unstable_by_key).
+	///
+	/// # Current Implementation
+	///
+	/// The current algorithm is an adaptive, iterative merge sort inspired by
+	/// [timsort](https://en.wikipedia.org/wiki/Timsort).
+	/// It is designed to be very fast in cases where the array is nearly sorted, or consists of
+	/// two or more sorted sequences concatenated one after another.
+	///
+	/// Also, it allocates temporary storage half the size of `self`, but for short arrays a
+	/// non-allocating insertion sort is used instead.
+	///
+	/// In order to sort the array in parallel, the array is first divided into smaller chunks and
+	/// all chunks are sorted in parallel. Then, adjacent chunks that together form non-descending
+	/// or descending runs are concatenated. Finally, the remaining chunks are merged together using
+	/// parallel subdivision of chunks and parallel merge operation.
+	///
+	/// # Examples
+	///
+	/// ```
+	/// use ndarray_slice::{ndarray::arr1, Slice1Ext};
+	///
+	/// let mut v = arr1(&[-5i32, 4, 1, -3, 2]);
+	///
+	/// v.par_sort_by_key(|k| k.abs());
+	/// assert!(v == arr1(&[1, 2, -3, 4, -5]));
+	/// ```
+	#[cfg(feature = "rayon")]
+	fn par_sort_by_key<K, F>(&mut self, f: F)
+	where
+		A: Send,
+		K: Ord,
+		F: Fn(&A) -> K + Sync,
+		S: DataMut;
+	/// Sorts the array in parallel with a key extraction function.
+	///
+	/// During sorting, the key function is called at most once per element, by using
+	/// temporary storage to remember the results of key evaluation.
+	/// The order of calls to the key function is unspecified and may change in future versions
+	/// of the standard library.
+	///
+	/// This sort is stable (i.e., does not reorder equal elements) and *O*(*mn* + *n* log *n*)
+	/// worst-case, where the key function is *O*(*m*).
+	///
+	/// For simple key functions (e.g., functions that are property accesses or
+	/// basic operations), [`par_sort_by_key`](Slice1Ext::par_sort_by_key) is likely to be
+	/// faster.
+	///
+	/// # Current Implementation
+	///
+	/// The current algorithm is based on [pattern-defeating quicksort][pdqsort] by Orson Peters,
+	/// which combines the fast average case of randomized quicksort with the fast worst case of
+	/// heapsort, while achieving linear time on arrays with certain patterns. It uses some
+	/// randomization to avoid degenerate cases, but with a fixed seed to always provide
+	/// deterministic behavior.
+	///
+	/// In the worst case, the algorithm allocates temporary storage in a `Vec<(K, usize)>` the
+	/// length of the array.
+	///
+	/// In order to sort the array in parallel, the array is first divided into smaller chunks and
+	/// all chunks are sorted in parallel. Then, adjacent chunks that together form non-descending
+	/// or descending runs are concatenated. Finally, the remaining chunks are merged together using
+	/// parallel subdivision of chunks and parallel merge operation.
+	///
+	/// # Examples
+	///
+	/// ```
+	/// # if !cfg!(miri) {
+	/// use ndarray_slice::{ndarray::arr1, Slice1Ext};
+	///
+	/// let mut v = arr1(&[-5i32, 4, 32, -3, 2]);
+	///
+	/// v.par_sort_by_cached_key(|k| k.to_string());
+	/// assert!(v == arr1(&[-3, -5, 2, 32, 4]));
+	/// # }
+	/// ```
+	///
+	/// [pdqsort]: https://github.com/orlp/pdqsort
+	#[cfg(feature = "rayon")]
+	fn par_sort_by_cached_key<K, F>(&mut self, f: F)
+	where
+		A: Send + Sync,
+		F: Fn(&A) -> K + Sync,
+		K: Ord + Send,
+		S: DataMut;
+
 	/// This sort is stable (i.e., does not reorder equal elements) and *O*(*n* log *n*) worst-case.
 	///
 	/// When applicable, unstable sorting is preferred because it is generally faster than stable
@@ -285,6 +493,146 @@ where
 	where
 		F: FnMut(&A) -> K,
 		K: Ord,
+		S: DataMut;
+
+	/// Sorts the array in parallel, but might not preserve the order of equal elements.
+	///
+	/// This sort is unstable (i.e., may reorder equal elements), in-place
+	/// (i.e., does not allocate), and *O*(*n* log *n*) worst-case.
+	///
+	/// # Current Implementation
+	///
+	/// The current algorithm is based on [pattern-defeating quicksort][pdqsort] by Orson Peters,
+	/// which combines the fast average case of randomized quicksort with the fast worst case of
+	/// heapsort, while achieving linear time on arrays with certain patterns. It uses some
+	/// randomization to avoid degenerate cases, but with a fixed seed to always provide
+	/// deterministic behavior.
+	///
+	/// It is typically faster than stable sorting, except in a few special cases, e.g., when the
+	/// array consists of several concatenated sorted sequences.
+	///
+	/// All quicksorts work in two stages: partitioning into two halves followed by recursive
+	/// calls. The partitioning phase is sequential, but the two recursive calls are performed in
+	/// parallel.
+	///
+	/// # Examples
+	///
+	/// ```
+	/// use ndarray_slice::{ndarray::arr1, Slice1Ext};
+	///
+	/// let mut v = arr1(&[-5, 4, 1, -3, 2]);
+	///
+	/// v.par_sort_unstable();
+	/// assert!(v == arr1(&[-5, -3, 1, 2, 4]));
+	/// ```
+	///
+	/// [pdqsort]: https://github.com/orlp/pdqsort
+	#[cfg(feature = "rayon")]
+	fn par_sort_unstable(&mut self)
+	where
+		A: Ord + Send,
+		S: DataMut;
+	/// Sorts the array in parallel with a comparator function, but might not preserve the order of equal
+	/// elements.
+	///
+	/// This sort is unstable (i.e., may reorder equal elements), in-place
+	/// (i.e., does not allocate), and *O*(*n* log *n*) worst-case.
+	///
+	/// The comparator function must define a total ordering for the elements in the array. If
+	/// the ordering is not total, the order of the elements is unspecified. An order is a
+	/// total order if it is (for all `a`, `b` and `c`):
+	///
+	/// * total and antisymmetric: exactly one of `a < b`, `a == b` or `a > b` is true, and
+	/// * transitive, `a < b` and `b < c` implies `a < c`. The same must hold for both `==` and `>`.
+	///
+	/// For example, while [`f64`] doesn't implement [`Ord`] because `NaN != NaN`, we can use
+	/// `partial_cmp` as our sort function when we know the array doesn't contain a `NaN`.
+	///
+	/// ```
+	/// use ndarray_slice::{ndarray::arr1, Slice1Ext};
+	///
+	/// let mut floats = arr1(&[5f64, 4.0, 1.0, 3.0, 2.0]);
+	/// floats.par_sort_unstable_by(|a, b| a.partial_cmp(b).unwrap());
+	/// assert_eq!(floats, arr1(&[1.0, 2.0, 3.0, 4.0, 5.0]));
+	/// ```
+	///
+	/// # Current Implementation
+	///
+	/// The current algorithm is based on [pattern-defeating quicksort][pdqsort] by Orson Peters,
+	/// which combines the fast average case of randomized quicksort with the fast worst case of
+	/// heapsort, while achieving linear time on arrays with certain patterns. It uses some
+	/// randomization to avoid degenerate cases, but with a fixed seed to always provide
+	/// deterministic behavior.
+	///
+	/// It is typically faster than stable sorting, except in a few special cases, e.g., when the
+	/// array consists of several concatenated sorted sequences.
+	///
+	/// All quicksorts work in two stages: partitioning into two halves followed by recursive
+	/// calls. The partitioning phase is sequential, but the two recursive calls are performed in
+	/// parallel.
+	///
+	/// # Examples
+	///
+	/// ```
+	/// use ndarray_slice::{ndarray::arr1, Slice1Ext};
+	///
+	/// let mut v = arr1(&[5, 4, 1, 3, 2]);
+	/// v.par_sort_unstable_by(|a, b| a.cmp(b));
+	/// assert!(v == arr1(&[1, 2, 3, 4, 5]));
+	///
+	/// // reverse sorting
+	/// v.par_sort_unstable_by(|a, b| b.cmp(a));
+	/// assert!(v == arr1(&[5, 4, 3, 2, 1]));
+	/// ```
+	///
+	/// [pdqsort]: https://github.com/orlp/pdqsort
+	#[cfg(feature = "rayon")]
+	fn par_sort_unstable_by<F>(&mut self, compare: F)
+	where
+		A: Send,
+		F: Fn(&A, &A) -> Ordering + Sync,
+		S: DataMut;
+	/// Sorts the array in parallel with a key extraction function, but might not preserve the order of equal
+	/// elements.
+	///
+	/// This sort is unstable (i.e., may reorder equal elements), in-place
+	/// (i.e., does not allocate), and *O*(*mn* log *n*) worst-case, where the key function is
+	/// *O*(*m*).
+	///
+	/// # Current Implementation
+	///
+	/// The current algorithm is based on [pattern-defeating quicksort][pdqsort] by Orson Peters,
+	/// which combines the fast average case of randomized quicksort with the fast worst case of
+	/// heapsort, while achieving linear time on arrays with certain patterns. It uses some
+	/// randomization to avoid degenerate cases, but with a fixed seed to always provide
+	/// deterministic behavior.
+	///
+	/// Due to its key calling strategy, [`par_sort_unstable_by_key`](#method.par_sort_unstable_by_key)
+	/// is likely to be slower than [`par_sort_by_cached_key`](#method.par_sort_by_cached_key) in
+	/// cases where the key function is expensive.
+	///
+	/// All quicksorts work in two stages: partitioning into two halves followed by recursive
+	/// calls. The partitioning phase is sequential, but the two recursive calls are performed in
+	/// parallel.
+	///
+	/// # Examples
+	///
+	/// ```
+	/// use ndarray_slice::{ndarray::arr1, Slice1Ext};
+	///
+	/// let mut v = arr1(&[-5i32, 4, 1, -3, 2]);
+	///
+	/// v.par_sort_unstable_by_key(|k| k.abs());
+	/// assert!(v == arr1(&[1, 2, -3, 4, -5]));
+	/// ```
+	///
+	/// [pdqsort]: https://github.com/orlp/pdqsort
+	#[cfg(feature = "rayon")]
+	fn par_sort_unstable_by_key<K, F>(&mut self, f: F)
+	where
+		A: Send,
+		K: Ord,
+		F: Fn(&A) -> K + Sync,
 		S: DataMut;
 
 	/// Sorts the array, but might not preserve the order of equal elements.
@@ -469,12 +817,165 @@ where
 		F: FnMut(&A) -> K,
 		K: PartialOrd;
 
+	/// Reorder the array in parallel such that the elements at `indices` are at their final sorted position.
+	///
+	/// Bulk version of [`select_nth_unstable`] extending `collection` with `&mut element`
+	/// in the order of `indices`. The provided `indices` must be sorted and unique which can be
+	/// achieved with [`par_sort_unstable`] followed by [`partition_dedup`].
+	///
+	/// # Current Implementation
+	///
+	/// The current algorithm chooses `at = indices.len() / 2` as pivot index and recurses in parallel into the
+	/// left and right subviews of `indices` (i.e., `..at` and `at + 1..`) with corresponding left
+	/// and right subviews of `self` (i.e., `..pivot` and `pivot + 1..`) where `pivot = indices[at]`.
+	/// Requiring `indices` to be already sorted, reduces the time complexity in the length *m* of
+	/// `indices` from *O*(*m*) to *O*(log *m*) compared to invoking [`select_nth_unstable`] on the
+	/// full view of `self` for each index.
+	///
+	/// # Panics
+	///
+	/// Panics when any `indices[i] >= len()`, meaning it always panics on empty arrays. Panics
+	/// when `indices` is unsorted or contains duplicates.
+	///
+	/// [`par_sort_unstable`]: Slice1Ext::par_sort_unstable
+	/// [`partition_dedup`]: Slice1Ext::partition_dedup
+	/// [`select_nth_unstable`]: Slice1Ext::select_nth_unstable
+	///
+	/// # Examples
+	///
+	/// ```
+	/// use ndarray_slice::{ndarray::arr1, Slice1Ext};
+	///
+	/// let mut v = arr1(&[-5i32, 4, 1, -3, 2, 9, 3, 4, 0]);
+	///
+	/// // Find values at following indices.
+	/// let indices = arr1(&[1, 4, 6]);
+	///
+	/// let mut values = Vec::new();
+	/// v.par_select_many_nth_unstable(&indices, &mut values);
+	///
+	/// assert!(values == [&-3, &2, &4]);
+	/// ```
+	#[cfg(feature = "rayon")]
+	fn par_select_many_nth_unstable<'a, S2>(
+		&'a mut self,
+		indices: &ArrayBase<S2, Ix1>,
+		collection: &mut Vec<&'a mut A>,
+	) where
+		A: Ord + Send,
+		S: DataMut,
+		S2: Data<Elem = usize> + Sync;
+	/// Reorder the array in parallel with a comparator function such that the elements at `indices` are at
+	/// their final sorted position.
+	///
+	/// Bulk version of [`select_nth_unstable_by`] extending `collection` with `&mut element`
+	/// in the order of `indices`. The provided `indices` must be sorted and unique which can be
+	/// achieved with [`par_sort_unstable`] followed by [`partition_dedup`].
+	///
+	/// # Current Implementation
+	///
+	/// The current algorithm chooses `at = indices.len() / 2` as pivot index and recurses in parallel into the
+	/// left and right subviews of `indices` (i.e., `..at` and `at + 1..`) with corresponding left
+	/// and right subviews of `self` (i.e., `..pivot` and `pivot + 1..`) where `pivot = indices[at]`.
+	/// Requiring `indices` to be already sorted, reduces the time complexity in the length *m* of
+	/// `indices` from *O*(*m*) to *O*(log *m*) compared to invoking [`select_nth_unstable_by`] on the
+	/// full view of `self` for each index.
+	///
+	/// # Panics
+	///
+	/// Panics when any `indices[i] >= len()`, meaning it always panics on empty arrays. Panics
+	/// when `indices` is unsorted or contains duplicates.
+	///
+	/// [`par_sort_unstable`]: Slice1Ext::par_sort_unstable
+	/// [`partition_dedup`]: Slice1Ext::partition_dedup
+	/// [`select_nth_unstable_by`]: Slice1Ext::select_nth_unstable_by
+	///
+	/// # Examples
+	///
+	/// ```
+	/// use ndarray_slice::{ndarray::arr1, Slice1Ext};
+	/// use std::collections::HashMap;
+	///
+	/// let mut v = arr1(&[-5i32, 4, 1, -3, 2, 9, 3, 4, 0]);
+	///
+	/// // Find values at following indices.
+	/// let indices = arr1(&[1, 4, 6]);
+	///
+	/// let mut values = Vec::new();
+	/// v.par_select_many_nth_unstable_by(&indices, &mut values, |a, b| b.cmp(a));
+	///
+	/// assert!(values == [&4, &2, &0]);
+	/// ```
+	#[cfg(feature = "rayon")]
+	fn par_select_many_nth_unstable_by<'a, F, S2>(
+		&'a mut self,
+		indices: &ArrayBase<S2, Ix1>,
+		collection: &mut Vec<&'a mut A>,
+		compare: F,
+	) where
+		A: Send,
+		F: Fn(&A, &A) -> Ordering + Sync,
+		S: DataMut,
+		S2: Data<Elem = usize> + Sync;
+	/// Reorder the array in parallel with a key extraction function such that the elements at `indices` are at
+	/// their final sorted position.
+	///
+	/// Bulk version of [`select_nth_unstable_by_key`] extending `collection` with `&mut element`
+	/// in the order of `indices`. The provided `indices` must be sorted and unique which can be
+	/// achieved with [`par_sort_unstable`] followed by [`partition_dedup`].
+	///
+	/// # Current Implementation
+	///
+	/// The current algorithm chooses `at = indices.len() / 2` as pivot index and recurses in parallel into the
+	/// left and right subviews of `indices` (i.e., `..at` and `at + 1..`) with corresponding left
+	/// and right subviews of `self` (i.e., `..pivot` and `pivot + 1..`) where `pivot = indices[at]`.
+	/// Requiring `indices` to be already sorted, reduces the time complexity in the length *m* of
+	/// `indices` from *O*(*m*) to *O*(log *m*) compared to invoking [`select_nth_unstable_by_key`] on the
+	/// full view of `self` for each index.
+	///
+	/// # Panics
+	///
+	/// Panics when any `indices[i] >= len()`, meaning it always panics on empty arrays. Panics
+	/// when `indices` is unsorted or contains duplicates.
+	///
+	/// [`par_sort_unstable`]: Slice1Ext::par_sort_unstable
+	/// [`partition_dedup`]: Slice1Ext::partition_dedup
+	/// [`select_nth_unstable_by_key`]: Slice1Ext::select_nth_unstable_by_key
+	///
+	/// # Examples
+	///
+	/// ```
+	/// use ndarray_slice::{ndarray::arr1, Slice1Ext};
+	/// use std::collections::HashMap;
+	///
+	/// let mut v = arr1(&[-5i32, 4, 1, -3, 2, 9, 3, 4, 0]);
+	///
+	/// // Find values at following indices.
+	/// let indices = arr1(&[1, 4, 6]);
+	///
+	/// let mut values = Vec::new();
+	/// v.par_select_many_nth_unstable_by_key(&indices, &mut values, |&a| a.abs());
+	///
+	/// assert!(values == [&1, &3, &4]);
+	/// ```
+	#[cfg(feature = "rayon")]
+	fn par_select_many_nth_unstable_by_key<'a, K, F, S2>(
+		&'a mut self,
+		indices: &ArrayBase<S2, Ix1>,
+		collection: &mut Vec<&'a mut A>,
+		f: F,
+	) where
+		A: Send,
+		K: Ord,
+		F: Fn(&A) -> K + Sync,
+		S: DataMut,
+		S2: Data<Elem = usize> + Sync;
+
 	/// Reorder the array such that the elements at `indices` are at their final sorted position.
 	///
 	/// Bulk version of [`select_nth_unstable`] extending `collection` with `(index, &mut element)`
-	/// tuples. The order of extending the `collection` is not specified but deterministic. The
-	/// provided `indices` must be sorted and unique which can be achieved with [`sort_unstable`]
-	/// followed by [`partition_dedup`].
+	/// tuples in the order of `indices`. The provided `indices` must be sorted and unique which can
+	/// be achieved with [`sort_unstable`] followed by [`partition_dedup`].
 	///
 	/// # Current Implementation
 	///
@@ -524,9 +1025,8 @@ where
 	/// their final sorted position.
 	///
 	/// Bulk version of [`select_nth_unstable_by`] extending `collection` with `(index, &mut element)`
-	/// tuples. The order of extending the `collection` is not specified but deterministic. The
-	/// provided `indices` must be sorted and unique which can be achieved with [`sort_unstable`]
-	/// followed by [`partition_dedup`].
+	/// tuples in the order of `indices`. The provided `indices` must be sorted and unique which can
+	/// be achieved with [`sort_unstable`] followed by [`partition_dedup`].
 	///
 	/// # Current Implementation
 	///
@@ -578,9 +1078,8 @@ where
 	/// their final sorted position.
 	///
 	/// Bulk version of [`select_nth_unstable_by_key`] extending `collection` with `(index, &mut element)`
-	/// tuples. The order of extending the `collection` is not specified but deterministic. The
-	/// provided `indices` must be sorted and unique which can be achieved with [`sort_unstable`]
-	/// followed by [`partition_dedup`].
+	/// tuples in the order of `indices`. The provided `indices` must be sorted and unique which can
+	/// be achieved with [`sort_unstable`] followed by [`partition_dedup`].
 	///
 	/// # Current Implementation
 	///
@@ -1174,6 +1673,97 @@ impl<A, S> Slice1Ext<A, S> for ArrayBase<S, Ix1>
 where
 	S: Data<Elem = A>,
 {
+	#[cfg(feature = "rayon")]
+	#[inline]
+	fn par_sort(&mut self)
+	where
+		A: Ord + Send,
+		S: DataMut,
+	{
+		par_merge_sort(self.view_mut(), A::lt);
+	}
+	#[cfg(feature = "rayon")]
+	#[inline]
+	fn par_sort_by<F>(&mut self, compare: F)
+	where
+		A: Send,
+		F: Fn(&A, &A) -> Ordering + Sync,
+		S: DataMut,
+	{
+		par_merge_sort(self.view_mut(), |a: &A, b: &A| compare(a, b) == Less)
+	}
+	#[cfg(feature = "rayon")]
+	#[inline]
+	fn par_sort_by_key<K, F>(&mut self, f: F)
+	where
+		A: Send,
+		K: Ord,
+		F: Fn(&A) -> K + Sync,
+		S: DataMut,
+	{
+		par_merge_sort(self.view_mut(), |a: &A, b: &A| f(a).lt(&f(b)))
+	}
+	#[cfg(feature = "rayon")]
+	fn par_sort_by_cached_key<K, F>(&mut self, f: F)
+	where
+		A: Send + Sync,
+		F: Fn(&A) -> K + Sync,
+		K: Ord + Send,
+		S: DataMut,
+	{
+		use core::mem;
+		use rayon::{
+			iter::{ParallelBridge, ParallelIterator},
+			slice::ParallelSliceMut,
+		};
+
+		//let slice = self.as_parallel_slice_mut();
+		let len = self.len();
+		if len < 2 {
+			return;
+		}
+
+		// Helper macro for indexing our vector by the smallest possible type, to reduce allocation.
+		macro_rules! sort_by_key {
+			($t:ty) => {{
+				let mut indices: Vec<_> = self
+					.iter()
+					.enumerate()
+					.par_bridge()
+					.map(|(i, x)| (f(&*x), i as $t))
+					.collect();
+				// The elements of `indices` are unique, as they are indexed, so any sort will be
+				// stable with respect to the original slice. We use `sort_unstable` here because
+				// it requires less memory allocation.
+				indices.par_sort_unstable();
+				for i in 0..len {
+					let mut index = indices[i].1;
+					while (index as usize) < i {
+						index = indices[index as usize].1;
+					}
+					indices[i].1 = index;
+					self.swap(i, index as usize);
+				}
+			}};
+		}
+
+		let sz_u8 = mem::size_of::<(K, u8)>();
+		let sz_u16 = mem::size_of::<(K, u16)>();
+		let sz_u32 = mem::size_of::<(K, u32)>();
+		let sz_usize = mem::size_of::<(K, usize)>();
+
+		if sz_u8 < sz_u16 && len <= (std::u8::MAX as usize) {
+			return sort_by_key!(u8);
+		}
+		if sz_u16 < sz_u32 && len <= (std::u16::MAX as usize) {
+			return sort_by_key!(u16);
+		}
+		if sz_u32 < sz_usize && len <= (std::u32::MAX as usize) {
+			return sort_by_key!(u32);
+		}
+		sort_by_key!(usize)
+	}
+
 	#[cfg(feature = "alloc")]
 	#[inline]
 	fn sort(&mut self)
@@ -1256,6 +1846,37 @@ where
 		sort_by_key!(usize, self, f)
 	}
 
+	#[cfg(feature = "rayon")]
+	#[inline]
+	fn par_sort_unstable(&mut self)
+	where
+		A: Ord + Send,
+		S: DataMut,
+	{
+		par_quick_sort(self.view_mut(), A::lt);
+	}
+	#[cfg(feature = "rayon")]
+	#[inline]
+	fn par_sort_unstable_by<F>(&mut self, compare: F)
+	where
+		A: Send,
+		F: Fn(&A, &A) -> Ordering + Sync,
+		S: DataMut,
+	{
+		par_quick_sort(self.view_mut(), |a: &A, b: &A| compare(a, b) == Less)
+	}
+	#[cfg(feature = "rayon")]
+	#[inline]
+	fn par_sort_unstable_by_key<K, F>(&mut self, f: F)
+	where
+		A: Send,
+		K: Ord,
+		F: Fn(&A) -> K + Sync,
+		S: DataMut,
+	{
+		par_quick_sort(self.view_mut(), |a: &A, b: &A| f(a).lt(&f(b)))
+	}
+
 	#[inline]
 	fn sort_unstable(&mut self)
 	where
@@ -1305,6 +1926,72 @@ where
 		is_sorted(self.view(), |a, b| f(a).partial_cmp(&f(b)))
 	}
 
+	#[cfg(feature = "rayon")]
+	#[inline]
+	fn par_select_many_nth_unstable<'a, S2>(
+		&'a mut self,
+		indices: &ArrayBase<S2, Ix1>,
+		collection: &mut Vec<&'a mut A>,
+	) where
+		A: Ord + Send,
+		S: DataMut,
+		S2: Data<Elem = usize> + Sync,
+	{
+		collection.reserve_exact(indices.len());
+		let values = collection.spare_capacity_mut();
+		par_partition_at_indices(self.view_mut(), 0, indices.view(), values, &A::lt);
+		unsafe { collection.set_len(collection.len() + indices.len()) };
+	}
+	#[cfg(feature = "rayon")]
+	#[inline]
+	fn par_select_many_nth_unstable_by<'a, F, S2>(
+		&'a mut self,
+		indices: &ArrayBase<S2, Ix1>,
+		collection: &mut Vec<&'a mut A>,
+		compare: F,
+	) where
+		A: Send,
+		F: Fn(&A, &A) -> Ordering + Sync,
+		S: DataMut,
+		S2: Data<Elem = usize> + Sync,
+	{
+		collection.reserve_exact(indices.len());
+		let values = collection.spare_capacity_mut();
+		par_partition_at_indices(
+			self.view_mut(),
+			0,
+			indices.view(),
+			values,
+			&|a: &A, b: &A| compare(a, b) == Less,
+		);
+		unsafe { collection.set_len(collection.len() + indices.len()) };
+	}
+	#[cfg(feature = "rayon")]
+	#[inline]
+	fn par_select_many_nth_unstable_by_key<'a, K, F, S2>(
+		&'a mut self,
+		indices: &ArrayBase<S2, Ix1>,
+		collection: &mut Vec<&'a mut A>,
+		f: F,
+	) where
+		A: Send,
+		K: Ord,
+		F: Fn(&A) -> K + Sync,
+		S: DataMut,
+		S2: Data<Elem = usize> + Sync,
+	{
+		collection.reserve_exact(indices.len());
+		let values = collection.spare_capacity_mut();
+		par_partition_at_indices(
+			self.view_mut(),
+			0,
+			indices.view(),
+			values,
+			&|a: &A, b: &A| f(a).lt(&f(b)),
+		);
+		unsafe { collection.set_len(collection.len() + indices.len()) };
+	}
+
 	#[inline]
 	fn select_many_nth_unstable<'a, E, S2>(
 		&'a mut self,
@@ -1316,7 +2003,7 @@ where
 		S: DataMut,
 		S2: Data<Elem = usize>,
 	{
-		partition_at_indices(self.view_mut(), 0, indices, collection, &mut A::lt);
+		partition_at_indices(self.view_mut(), 0, indices.view(), collection, &mut A::lt);
 	}
 	#[inline]
 	fn select_many_nth_unstable_by<'a, E, F, S2>(
@@ -1334,7 +2021,7 @@ where
 		partition_at_indices(
 			self.view_mut(),
 			0,
-			indices,
+			indices.view(),
 			collection,
 			&mut |a: &A, b: &A| compare(a, b) == Less,
 		);
@@ -1356,7 +2043,7 @@ where
 		partition_at_indices(
 			self.view_mut(),
 			0,
-			indices,
+			indices.view(),
 			collection,
 			&mut |a: &A, b: &A| f(a).lt(&f(b)),
 		);
