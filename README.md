@@ -44,7 +44,7 @@ let mut column = v.column_mut(4);
 assert_eq!(column.as_slice_mut(), None);
 
 // Instead, sorting is specifically implemented for non-contiguous
-//  mutable (sub)views.
+// mutable (sub)views.
 column.sort_unstable();
 
 assert!(v == arr2(&[[-5, 4, 1, -3, -1],
