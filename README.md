@@ -62,11 +62,11 @@ Complexities where *n* is the length of the (sub)view and *m* the count of indic
 | Resource | Complexity | Sorting (stable) | Sorting (unstable)  | Selection (unstable)     | Bulk Selection (unstable) |
 |----------|------------|------------------|---------------------|--------------------------|---------------------------|
 | Time     | Best       | *O*(*n*)         | *O*(*n*)            | *O*(*n*)                 | *O*(*n* log *m*)          |
-| Time     | Expected   | *O*(*n* log *n*) | *O*(*n* log *n*)    | *O*(*n*)                 | *O*(*n* log *m*)          |
+| Time     | Average    | *O*(*n* log *n*) | *O*(*n* log *n*)    | *O*(*n*)                 | *O*(*n* log *m*)          |
 | Time     | Worst      | *O*(*n* log *n*) | *O*(*n* log *n*)    | *O*(*n* log *n*)         | *O*(*n* log *n* log *m*)  |
 | Space    | Best       | *O*(1)           | *O*(1)              | *O*(1)                   | *O*(*m*)                  |
-| Space    | Expected   | *O*(*n*/2)       | *O*(log *n*)        | *O*(log *n*)             | *O*(*m*+log *n*)          |
-| Spoce    | Worst      | *O*(*n*/2)       | *O*(log *n*)        | *O*(log *n*)             | *O*(*m*+log *n*)          |
+| Space    | Average    | *O*(*n*/2)       | *O*(log *n*)        | *O*(1)                   | *O*(*m*+log *m*)          |
+| Space    | Worst      | *O*(*n*/2)       | *O*(log *n*)        | *O*(1)                   | *O*(*m*+log *m*)          |
 
 
 [sorting]: https://en.wikipedia.org/wiki/Sorting_algorithm
