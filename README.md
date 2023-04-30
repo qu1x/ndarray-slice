@@ -82,8 +82,8 @@ Complexities where *n* is the length of the (sub)view and *m* the count of indic
   * Lower worst-case time complexity from *O*(*n* log *n*) to *O*(*n*) for selection algorithms.
   * Add `SliceExt` trait for *n*-dimensional array or (sub)view with methods expecting `Axis` as
     their first argument. Comparing methods will always be suffixed with `_by` or `_by_key`
-    defining how to compare multi-dimensional elements (e.g., columns) along the provided axis
-    of interest (e.g., rows).
+    defining how to compare multi-dimensional elements (e.g., rows) along the provided axis of
+    interest (e.g., columns).
 
 See the [release history](RELEASES.md) to keep track of the development.
 
