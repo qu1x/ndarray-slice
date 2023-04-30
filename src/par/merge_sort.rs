@@ -956,6 +956,7 @@ mod test {
 		}
 	}
 
+	#[derive(Debug, Clone, Copy)]
 	struct Item {
 		index: usize,
 		value: u32,
@@ -995,15 +996,14 @@ mod test {
 			.enumerate()
 			.map(Item::from)
 			.collect::<Vec<Item>>();
+		let mut sorted = xs.clone();
+		sorted.sort();
+		let sorted = Array1::from_vec(sorted);
 		let mut array = Array1::from_vec(xs);
 		par_merge_sort(array.view_mut(), Item::lt);
-		for i in 1..array.len() {
-			let [a, b] = [&array[i - 1], &array[i]];
-			if a.value == b.value {
-				assert!(a.index < b.index);
-			} else {
-				assert!(a.value < b.value);
-			}
+		for (a, s) in array.iter().zip(&sorted) {
+			assert_eq!(a.index, s.index);
+			assert_eq!(a.value, s.value);
 		}
 	}
 }

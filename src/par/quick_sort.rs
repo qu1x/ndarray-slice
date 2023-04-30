@@ -149,10 +149,11 @@ mod test {
 	#[cfg_attr(miri, ignore)]
 	#[quickcheck]
 	fn sorted(xs: Vec<u32>) {
+		let mut sorted = xs.clone();
+		sorted.sort_unstable();
+		let sorted = Array1::from_vec(sorted);
 		let mut array = Array1::from_vec(xs);
 		par_quick_sort(array.view_mut(), u32::lt);
-		for i in 1..array.len() {
-			assert!(array[i - 1] <= array[i]);
-		}
+		assert_eq!(array, sorted);
 	}
 }
