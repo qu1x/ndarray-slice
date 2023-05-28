@@ -41,14 +41,14 @@
 //!
 //! Complexities where *n* is the length of the (sub)view and *m* the count of indices to select.
 //!
-//! | Resource | Complexity | Sorting (stable) | Sorting (unstable)  | Selection (unstable)     | Bulk Selection (unstable) |
-//! |----------|------------|------------------|---------------------|--------------------------|---------------------------|
-//! | Time     | Best       | *O*(*n*)         | *O*(*n*)            | *O*(*n*)                 | *O*(*n* log *m*)          |
-//! | Time     | Average    | *O*(*n* log *n*) | *O*(*n* log *n*)    | *O*(*n*)                 | *O*(*n* log *m*)          |
-//! | Time     | Worst      | *O*(*n* log *n*) | *O*(*n* log *n*)    | *O*(*n* log *n*)         | *O*(*n* log *n* log *m*)  |
-//! | Space    | Best       | *O*(1)           | *O*(1)              | *O*(1)                   | *O*(*m*)                  |
-//! | Space    | Average    | *O*(*n*/2)       | *O*(log *n*)        | *O*(1)                   | *O*(*m*+log *m*)          |
-//! | Space    | Worst      | *O*(*n*/2)       | *O*(log *n*)        | *O*(1)                   | *O*(*m*+log *m*)          |
+//! | Resource | Complexity | Sorting (stable) | Sorting (unstable)  | Selection (unstable) | Bulk Selection (unstable) |
+//! |----------|------------|------------------|---------------------|----------------------|---------------------------|
+//! | Time     | Best       | *O*(*n*)         | *O*(*n*)            | *O*(*n*)             | *O*(*n* log *m*)          |
+//! | Time     | Average    | *O*(*n* log *n*) | *O*(*n* log *n*)    | *O*(*n*)             | *O*(*n* log *m*)          |
+//! | Time     | Worst      | *O*(*n* log *n*) | *O*(*n* log *n*)    | *O*(*n*)             | *O*(*n* log *m*)          |
+//! | Space    | Best       | *O*(1)           | *O*(1)              | *O*(1)               | *O*(*m*)                  |
+//! | Space    | Average    | *O*(*n*/2)       | *O*(log *n*)        | *O*(1)               | *O*(*m*+log *m*)          |
+//! | Space    | Worst      | *O*(*n*/2)       | *O*(log *n*)        | *O*(1)               | *O*(*m*+log *m*)          |
 //!
 //!
 //! [sorting]: https://en.wikipedia.org/wiki/Sorting_algorithm
@@ -61,7 +61,6 @@
 //!
 //! # Roadmap
 //!
-//!   * Lower worst-case time complexity from *O*(*n* log *n*) to *O*(*n*) for selection algorithms.
 //!   * Add `SliceExt` trait for *n*-dimensional array or (sub)view with methods expecting `Axis` as
 //!     their first argument. Comparing methods will always be suffixed with `_by` or `_by_key`
 //!     defining how to compare multi-dimensional elements (e.g., rows) along the provided axis of
@@ -1133,7 +1132,7 @@ where
 	/// This reordering has the additional property that any value at position `i < index` will be
 	/// less than or equal to any value at a position `j > index`. Additionally, this reordering is
 	/// unstable (i.e. any number of equal elements may end up at position `index`), in-place
-	/// (i.e. does not allocate), and *O*(*n*) on avrage. The worst-case performance is *O*(*n* log *n*).
+	/// (i.e. does not allocate), and runs in *O*(*n*) time.
 	/// This function is also known as "kth element" in other libraries.
 	///
 	/// It returns a triplet of the following from the reordered array:
@@ -1183,8 +1182,8 @@ where
 	/// This reordering has the additional property that any value at position `i < index` will be
 	/// less than or equal to any value at a position `j > index` using the comparator function.
 	/// Additionally, this reordering is unstable (i.e. any number of equal elements may end up at
-	/// position `index`), in-place (i.e. does not allocate), and *O*(*n*) on average. The worst-case
-	/// performance is *O*(*n* log *n*). This function is also known as "kth element" in other libraries.
+	/// position `index`), in-place (i.e. does not allocate), and runs in *O*(*n*) time.
+	/// This function is also known as "kth element" in other libraries.
 	///
 	/// It returns a triplet of the following from
 	/// the array reordered according to the provided comparator function: the subarray prior to
@@ -1235,8 +1234,8 @@ where
 	/// This reordering has the additional property that any value at position `i < index` will be
 	/// less than or equal to any value at a position `j > index` using the key extraction function.
 	/// Additionally, this reordering is unstable (i.e. any number of equal elements may end up at
-	/// position `index`), in-place (i.e. does not allocate), and *O*(*n*) on average. The worst-case
-	/// porformance is *O*(*n* log *n*). This function is also known as "kth element" in other libraries.
+	/// position `index`), in-place (i.e. does not allocate), and runs in *O*(*n*) time.
+	/// This function is also known as "kth element" in other libraries.
 	///
 	/// It returns a triplet of the following from
 	/// the array reordered according to the provided key extraction function: the subarray prior to

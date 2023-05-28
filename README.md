@@ -59,14 +59,14 @@ assert!(v == arr2(&[[-5, 4, 1, -3, -1],
 
 Complexities where *n* is the length of the (sub)view and *m* the count of indices to select.
 
-| Resource | Complexity | Sorting (stable) | Sorting (unstable)  | Selection (unstable)     | Bulk Selection (unstable) |
-|----------|------------|------------------|---------------------|--------------------------|---------------------------|
-| Time     | Best       | *O*(*n*)         | *O*(*n*)            | *O*(*n*)                 | *O*(*n* log *m*)          |
-| Time     | Average    | *O*(*n* log *n*) | *O*(*n* log *n*)    | *O*(*n*)                 | *O*(*n* log *m*)          |
-| Time     | Worst      | *O*(*n* log *n*) | *O*(*n* log *n*)    | *O*(*n* log *n*)         | *O*(*n* log *n* log *m*)  |
-| Space    | Best       | *O*(1)           | *O*(1)              | *O*(1)                   | *O*(*m*)                  |
-| Space    | Average    | *O*(*n*/2)       | *O*(log *n*)        | *O*(1)                   | *O*(*m*+log *m*)          |
-| Space    | Worst      | *O*(*n*/2)       | *O*(log *n*)        | *O*(1)                   | *O*(*m*+log *m*)          |
+| Resource | Complexity | Sorting (stable) | Sorting (unstable)  | Selection (unstable) | Bulk Selection (unstable) |
+|----------|------------|------------------|---------------------|----------------------|---------------------------|
+| Time     | Best       | *O*(*n*)         | *O*(*n*)            | *O*(*n*)             | *O*(*n* log *m*)          |
+| Time     | Average    | *O*(*n* log *n*) | *O*(*n* log *n*)    | *O*(*n*)             | *O*(*n* log *m*)          |
+| Time     | Worst      | *O*(*n* log *n*) | *O*(*n* log *n*)    | *O*(*n*)             | *O*(*n* log *m*)          |
+| Space    | Best       | *O*(1)           | *O*(1)              | *O*(1)               | *O*(*m*)                  |
+| Space    | Average    | *O*(*n*/2)       | *O*(log *n*)        | *O*(1)               | *O*(*m*+log *m*)          |
+| Space    | Worst      | *O*(*n*/2)       | *O*(log *n*)        | *O*(1)               | *O*(*m*+log *m*)          |
 
 
 [sorting]: https://en.wikipedia.org/wiki/Sorting_algorithm
@@ -79,7 +79,6 @@ Complexities where *n* is the length of the (sub)view and *m* the count of indic
 
 ## Roadmap
 
-  * Lower worst-case time complexity from *O*(*n* log *n*) to *O*(*n*) for selection algorithms.
   * Add `SliceExt` trait for *n*-dimensional array or (sub)view with methods expecting `Axis` as
     their first argument. Comparing methods will always be suffixed with `_by` or `_by_key`
     defining how to compare multi-dimensional elements (e.g., rows) along the provided axis of
