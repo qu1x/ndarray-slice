@@ -2,25 +2,9 @@
 //!
 //! [`core::slice::sort`]: https://doc.rust-lang.org/src/core/slice/sort.rs.html
 
+use crate::insertion_sort::InsertionHole;
 use core::{mem, ptr};
 use ndarray::{s, ArrayViewMut1, IndexLonger};
-
-// When dropped, copies from `src` into `dest`.
-struct InsertionHole<T> {
-	src: *const T,
-	dest: *mut T,
-}
-
-impl<T> Drop for InsertionHole<T> {
-	fn drop(&mut self) {
-		// SAFETY: This is a helper class. Please refer to its usage for correctness. Namely, one
-		// must be sure that `src` and `dst` does not overlap as required by
-		// `ptr::copy_nonoverlapping` and are both valid for writes.
-		unsafe {
-			ptr::copy_nonoverlapping(self.src, self.dest, 1);
-		}
-	}
-}
 
 /// Inserts `v[v.len() - 1]` into pre-sorted sequence `v[..v.len() - 1]` so that whole `v[..]`
 /// becomes sorted.
@@ -58,10 +42,7 @@ where
 			// If `is_less` panics at any point during the process, `hole` will get dropped and
 			// fill the hole in `v` with `tmp`, thus ensuring that `v` still holds every object it
 			// initially held exactly once.
-			let mut hole = InsertionHole {
-				src: &*tmp,
-				dest: v.view_mut().uget(i - 1),
-			};
+			let mut hole = InsertionHole::new(&*tmp, v.view_mut().uget(i - 1));
 			ptr::copy_nonoverlapping(hole.dest, v.view_mut().uget(i), 1);
 
 			// SAFETY: We know i is at least 1.
@@ -126,7 +107,7 @@ where
 			// fill the hole in `v` with `tmp`, thus ensuring that `v` still holds every object it
 			// initially held exactly once.
 			let dest = v.view_mut().uget(1);
-			let mut hole = InsertionHole { src: &*tmp, dest };
+			let mut hole = InsertionHole::new(&*tmp, dest);
 			ptr::copy_nonoverlapping(dest, v.view_mut().uget(0), 1);
 
 			for i in 2..v.len() {

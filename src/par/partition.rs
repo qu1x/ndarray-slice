@@ -3,6 +3,7 @@
 //! [`core::slice::sort`]: https://doc.rust-lang.org/src/core/slice/sort.rs.html
 
 use crate::{
+	insertion_sort::InsertionHole,
 	par::insertion_sort::insertion_sort_shift_left,
 	partition::{break_patterns, reverse},
 };
@@ -361,10 +362,7 @@ where
 	// operation panics, the pivot will be automatically written back into the slice.
 	// SAFETY: The pointer here is valid because it is obtained from a reference to a slice.
 	let tmp = ManuallyDrop::new(unsafe { ptr::read(pivot) });
-	let _pivot_guard = CopyOnDrop {
-		src: &*tmp,
-		dest: pivot,
-	};
+	let _pivot_guard = unsafe { InsertionHole::new(&*tmp, pivot) };
 	let pivot = &*tmp;
 
 	// Now partition the slice.
@@ -427,10 +425,7 @@ where
 
 		// SAFETY: `pivot` is a reference to the first element of `v`, so `ptr::read` is safe.
 		let tmp = ManuallyDrop::new(unsafe { ptr::read(pivot) });
-		let _pivot_guard = CopyOnDrop {
-			src: &*tmp,
-			dest: pivot,
-		};
+		let _pivot_guard = unsafe { InsertionHole::new(&*tmp, pivot) };
 		let pivot = &*tmp;
 
 		// Find the first pair of out-of-order elements.
@@ -827,23 +822,6 @@ where
 		// descending, so reversing will probably help sort it faster.
 		reverse(v);
 		(len - 1 - b, true)
-	}
-}
-
-/// When dropped, copies from `src` into `dest`.
-pub struct CopyOnDrop<T> {
-	pub src: *const T,
-	pub dest: *mut T,
-}
-
-impl<T> Drop for CopyOnDrop<T> {
-	fn drop(&mut self) {
-		// SAFETY: This is a helper class.
-		//         Please refer to its usage for correctness.
-		//         Namely, one must be sure that `src` and `dst` does not overlap as required by `ptr::copy_nonoverlapping`.
-		unsafe {
-			ptr::copy_nonoverlapping(self.src, self.dest, 1);
-		}
 	}
 }
 

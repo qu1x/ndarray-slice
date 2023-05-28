@@ -2,16 +2,33 @@
 //!
 //! [`core::slice::sort`]: https://doc.rust-lang.org/src/core/slice/sort.rs.html
 
-use core::{mem, ptr};
+use core::{marker::PhantomData, mem, ptr};
 use ndarray::{s, ArrayViewMut1, IndexLonger};
 
 // When dropped, copies from `src` into `dest`.
-struct InsertionHole<T> {
-	src: *const T,
-	dest: *mut T,
+#[must_use]
+pub(super) struct InsertionHole<'a, T> {
+	pub(super) src: *const T,
+	pub(super) dest: *mut T,
+	/// `src` is often a local pointer here, make sure we have appropriate
+	/// PhantomData so that dropck can protect us.
+	marker: PhantomData<&'a mut T>,
 }
 
-impl<T> Drop for InsertionHole<T> {
+impl<'a, T> InsertionHole<'a, T> {
+	/// Construct from a source pointer and a destination
+	/// Assumes dest lives longer than src, since there is no easy way to
+	/// copy down lifetime information from another pointer
+	pub(super) unsafe fn new(src: &'a T, dest: *mut T) -> Self {
+		Self {
+			src,
+			dest,
+			marker: PhantomData,
+		}
+	}
+}
+
+impl<T> Drop for InsertionHole<'_, T> {
 	fn drop(&mut self) {
 		// SAFETY: This is a helper class. Please refer to its usage for correctness. Namely, one
 		// must be sure that `src` and `dst` does not overlap as required by
@@ -58,10 +75,7 @@ where
 			// If `is_less` panics at any point during the process, `hole` will get dropped and
 			// fill the hole in `v` with `tmp`, thus ensuring that `v` still holds every object it
 			// initially held exactly once.
-			let mut hole = InsertionHole {
-				src: &*tmp,
-				dest: v.view_mut().uget(i - 1),
-			};
+			let mut hole = InsertionHole::new(&*tmp, v.view_mut().uget(i - 1));
 			ptr::copy_nonoverlapping(hole.dest, v.view_mut().uget(i), 1);
 
 			// SAFETY: We know i is at least 1.
@@ -126,7 +140,7 @@ where
 			// fill the hole in `v` with `tmp`, thus ensuring that `v` still holds every object it
 			// initially held exactly once.
 			let dest = v.view_mut().uget(1);
-			let mut hole = InsertionHole { src: &*tmp, dest };
+			let mut hole = InsertionHole::new(&*tmp, dest);
 			ptr::copy_nonoverlapping(dest, v.view_mut().uget(0), 1);
 
 			for i in 2..v.len() {
