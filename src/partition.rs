@@ -2,7 +2,7 @@
 //!
 //! [`core::slice::sort`]: https://doc.rust-lang.org/src/core/slice/sort.rs.html
 
-use crate::{heap_sort::heap_sort, insertion_sort::insertion_sort};
+use crate::{heap_sort::heap_sort, insertion_sort::insertion_sort_shift_left};
 use core::{
 	cmp::{
 		self,
@@ -101,10 +101,14 @@ fn partition_at_index_loop<'a, T, F>(
 	let mut was_balanced = true;
 
 	loop {
+		let len = v.len();
+
 		// For slices of up to this length it's probably faster to simply sort them.
 		const MAX_INSERTION: usize = 10;
-		if v.len() <= MAX_INSERTION {
-			insertion_sort(v.view_mut(), is_less);
+		if len <= MAX_INSERTION {
+			if len >= 2 {
+				insertion_sort_shift_left(v.view_mut(), 1, is_less);
+			}
 			return;
 		}
 
@@ -145,7 +149,7 @@ fn partition_at_index_loop<'a, T, F>(
 		}
 
 		let (mid, _) = partition(v.view_mut(), pivot, is_less);
-		was_balanced = cmp::min(mid, v.len() - mid) >= v.len() / 8;
+		was_balanced = cmp::min(mid, len - mid) >= len / 8;
 
 		// Split the slice into `left`, `pivot`, and `right`.
 		let (left, right) = v.split_at(Axis(0), mid);
@@ -183,7 +187,7 @@ where
 	// operation panics, the pivot will be automatically written back into the slice.
 	// SAFETY: The pointer here is valid because it is obtained from a reference to a slice.
 	let tmp = ManuallyDrop::new(unsafe { ptr::read(pivot) });
-	let _pivot_guard = CopyOnDrop {
+	let _pivot_guard = InsertionHole {
 		src: &*tmp,
 		dest: pivot,
 	};
@@ -249,7 +253,7 @@ where
 
 		// SAFETY: `pivot` is a reference to the first element of `v`, so `ptr::read` is safe.
 		let tmp = ManuallyDrop::new(unsafe { ptr::read(pivot) });
-		let _pivot_guard = CopyOnDrop {
+		let _pivot_guard = InsertionHole {
 			src: &*tmp,
 			dest: pivot,
 		};
@@ -738,12 +742,12 @@ where
 }
 
 /// When dropped, copies from `src` into `dest`.
-pub struct CopyOnDrop<T> {
+pub struct InsertionHole<T> {
 	pub src: *const T,
 	pub dest: *mut T,
 }
 
-impl<T> Drop for CopyOnDrop<T> {
+impl<T> Drop for InsertionHole<T> {
 	fn drop(&mut self) {
 		// SAFETY: This is a helper class.
 		//         Please refer to its usage for correctness.

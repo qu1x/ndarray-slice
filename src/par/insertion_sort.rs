@@ -2,7 +2,7 @@
 //!
 //! [`core::slice::sort`]: https://doc.rust-lang.org/src/core/slice/sort.rs.html
 
-use crate::partition::CopyOnDrop;
+use crate::partition::InsertionHole;
 use core::{mem, mem::ManuallyDrop, ptr};
 use ndarray::{s, ArrayViewMut1, IndexLonger};
 
@@ -97,7 +97,7 @@ where
 			let tmp = mem::ManuallyDrop::new(ptr::read(w.uget(0)));
 			let src = v.view().index(1) as *const T;
 			let dst = v.view_mut().index(0) as *mut T;
-			let mut hole = CopyOnDrop {
+			let mut hole = InsertionHole {
 				src: &*tmp,
 				dest: src as *mut T,
 			};
@@ -148,7 +148,7 @@ where
 				// operation panics, `hole` will get dropped and automatically write the element back
 				// into the slice.
 				let tmp = ManuallyDrop::new(ptr::read(w.uget(len - 1)));
-				let mut hole = CopyOnDrop {
+				let mut hole = InsertionHole {
 					src: &*tmp,
 					dest: v.view_mut().index(len - 2),
 				};

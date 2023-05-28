@@ -4,7 +4,7 @@
 
 use crate::{
 	heap_sort::heap_sort,
-	insertion_sort::insertion_sort,
+	insertion_sort::insertion_sort_shift_left,
 	insertion_sort::partial_insertion_sort,
 	partition::{break_patterns, choose_pivot, partition, partition_equal},
 };
@@ -54,7 +54,9 @@ fn recurse<'a, T, F>(
 
 		// Very short slices get sorted using insertion sort.
 		if len <= MAX_INSERTION {
-			insertion_sort(v, is_less);
+			if len >= 2 {
+				insertion_sort_shift_left(v, 1, is_less);
+			}
 			return;
 		}
 
