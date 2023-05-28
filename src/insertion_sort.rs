@@ -251,3 +251,22 @@ where
 	// Didn't manage to sort the slice in the limited number of steps.
 	false
 }
+
+#[cfg(feature = "std")]
+#[cfg(test)]
+mod test {
+	use super::insertion_sort_shift_left;
+	use ndarray::Array1;
+	use quickcheck_macros::quickcheck;
+
+	#[quickcheck]
+	fn sorted(xs: Vec<u32>) {
+		let mut array = Array1::from_vec(xs);
+		if !array.is_empty() {
+			insertion_sort_shift_left(array.view_mut(), 1, &mut u32::lt);
+		}
+		for i in 1..array.len() {
+			assert!(array[i - 1] <= array[i]);
+		}
+	}
+}
