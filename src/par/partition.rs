@@ -3,7 +3,7 @@
 //! [`core::slice::sort`]: https://doc.rust-lang.org/src/core/slice/sort.rs.html
 
 use crate::{
-	par::{heap_sort::heap_sort, insertion_sort::insertion_sort},
+	par::insertion_sort::insertion_sort_shift_left,
 	partition::{break_patterns, reverse},
 };
 use core::{
@@ -15,6 +15,10 @@ use core::{
 	ptr,
 };
 use ndarray::{s, ArrayView1, ArrayViewMut1, Axis, IndexLonger};
+
+// For slices of up to this length it's probably faster to simply sort them.
+// Defined at the module scope because it's used in multiple functions.
+const MAX_INSERTION: usize = 10;
 
 pub fn par_partition_at_indices<'a, T, F>(
 	mut v: ArrayViewMut1<'a, T>,
@@ -80,20 +84,12 @@ where
 	} else if index == v.len() - 1 {
 		// Find max element and place it in the last position of the array. We're free to use
 		// `unwrap()` here because we know v must not be empty.
-		let (max_index, _) = v
-			.iter()
-			.enumerate()
-			.max_by(|&(_, x), &(_, y)| if is_less(x, y) { Less } else { Greater })
-			.unwrap();
+		let (max_index, _) = v.iter().enumerate().max_by(from_is_less(is_less)).unwrap();
 		v.swap(max_index, index);
 	} else if index == 0 {
 		// Find min element and place it in the first position of the array. We're free to use
 		// `unwrap()` here because we know v must not be empty.
-		let (min_index, _) = v
-			.iter()
-			.enumerate()
-			.min_by(|&(_, x), &(_, y)| if is_less(x, y) { Less } else { Greater })
-			.unwrap();
+		let (min_index, _) = v.iter().enumerate().min_by(from_is_less(is_less)).unwrap();
 		v.swap(min_index, index);
 	} else {
 		partition_at_index_loop(v.view_mut(), index, is_less, None);
@@ -104,6 +100,20 @@ where
 	(left, pivot.index(0), right)
 }
 
+/// helper function used to find the index of the min/max element
+/// using e.g. `slice.iter().enumerate().min_by(from_is_less(&mut is_less)).unwrap()`
+fn from_is_less<T>(
+	is_less: &impl Fn(&T, &T) -> bool,
+) -> impl Fn(&(usize, &T), &(usize, &T)) -> cmp::Ordering + '_ {
+	|&(_, x), &(_, y)| {
+		if is_less(x, y) {
+			cmp::Ordering::Less
+		} else {
+			cmp::Ordering::Greater
+		}
+	}
+}
+
 fn partition_at_index_loop<'a, T, F>(
 	mut v: ArrayViewMut1<'a, T>,
 	mut index: usize,
@@ -112,25 +122,27 @@ fn partition_at_index_loop<'a, T, F>(
 ) where
 	F: Fn(&T, &T) -> bool,
 {
-	// Limit the amount of iterations and fall back to heapsort, similarly to `slice::sort_unstable`.
-	// This lowers the worst case running time from O(n^2) to O(n log n).
-	// FIXME: Investigate whether it would be better to use something like Median of Medians
-	// or Fast Deterministic Selection to guarantee O(n) worst case.
-	let mut limit = usize::BITS - v.len().leading_zeros();
+	// Limit the amount of iterations and fall back to fast deterministic selection
+	// to ensure O(n) worst case running time. This limit needs to be constant, because
+	// using `ilog2(len)` like in `sort` would result in O(n log n) time complexity.
+	// The exact value of the limit is chosen somewhat arbitrarily, but for most inputs bad pivot
+	// selections should be relatively rare, so the limit usually shouldn't be reached
+	// anyways.
+	let mut limit = 16;
 
 	// True if the last partitioning was reasonably balanced.
 	let mut was_balanced = true;
 
 	loop {
-		// For slices of up to this length it's probably faster to simply sort them.
-		const MAX_INSERTION: usize = 10;
 		if v.len() <= MAX_INSERTION {
-			insertion_sort(v.view_mut(), is_less);
+			if !v.is_empty() {
+				insertion_sort_shift_left(v.view_mut(), 1, is_less);
+			}
 			return;
 		}
 
 		if limit == 0 {
-			heap_sort(v.view_mut(), is_less);
+			median_of_medians(v.view_mut(), is_less, index);
 			return;
 		}
 
@@ -185,6 +197,151 @@ fn partition_at_index_loop<'a, T, F>(
 			Equal => return,
 		}
 	}
+}
+
+/// Selection algorithm to select the k-th element from the slice in guaranteed O(n) time.
+/// This is essentially a quickselect that uses Tukey's Ninther for pivot selection
+fn median_of_medians<T, F: Fn(&T, &T) -> bool>(
+	mut v: ArrayViewMut1<'_, T>,
+	is_less: &F,
+	mut k: usize,
+) {
+	// Since this function isn't public, it should never be called with an out-of-bounds index.
+	debug_assert!(k < v.len());
+
+	// If T is as ZST, `partition_at_index` will already return early.
+	debug_assert!(mem::size_of::<T>() != 0);
+
+	// We now know that `k < v.len() <= isize::MAX`
+	loop {
+		if v.len() <= MAX_INSERTION {
+			if v.len() > 1 {
+				insertion_sort_shift_left(v.view_mut(), 1, is_less);
+			}
+			return;
+		}
+
+		// `median_of_{minima,maxima}` can't handle the extreme cases of the first/last element,
+		// so we catch them here and just do a linear search.
+		if k == v.len() - 1 {
+			// Find max element and place it in the last position of the array. We're free to use
+			// `unwrap()` here because we know v must not be empty.
+			let (max_index, _) = v.iter().enumerate().max_by(from_is_less(is_less)).unwrap();
+			v.swap(max_index, k);
+			return;
+		} else if k == 0 {
+			// Find min element and place it in the first position of the array. We're free to use
+			// `unwrap()` here because we know v must not be empty.
+			let (min_index, _) = v.iter().enumerate().min_by(from_is_less(is_less)).unwrap();
+			v.swap(min_index, k);
+			return;
+		}
+
+		let p = median_of_ninthers(v.view_mut(), is_less);
+
+		match p.cmp(&k) {
+			Equal => return,
+			Greater => {
+				let (left, _right) = v.split_at(Axis(0), p);
+				v = left;
+			}
+			Less => {
+				// Since `p < k < v.len()`, `p + 1` doesn't overflow and is
+				// a valid index into the slice.
+				let (_left, right) = v.split_at(Axis(0), p + 1);
+				v = right;
+				k -= p + 1;
+			}
+		}
+	}
+}
+
+// Optimized for when `k` lies somewhere in the middle of the slice. Selects a pivot
+// as close as possible to the median of the slice. For more details on how the algorithm
+// operates, refer to the paper <https://drops.dagstuhl.de/opus/volltexte/2017/7612/pdf/LIPIcs-SEA-2017-24.pdf>.
+fn median_of_ninthers<T, F: Fn(&T, &T) -> bool>(mut v: ArrayViewMut1<'_, T>, is_less: &F) -> usize {
+	// use `saturating_mul` so the multiplication doesn't overflow on 16-bit platforms.
+	let frac = if v.len() <= 1024 {
+		v.len() / 12
+	} else if v.len() <= 128_usize.saturating_mul(1024) {
+		v.len() / 64
+	} else {
+		v.len() / 1024
+	};
+
+	let pivot = frac / 2;
+	let lo = v.len() / 2 - pivot;
+	let hi = frac + lo;
+	let gap = (v.len() - 9 * frac) / 4;
+	let mut a = lo - 4 * frac - gap;
+	let mut b = hi + gap;
+	for i in lo..hi {
+		ninther(
+			v.view_mut(),
+			is_less,
+			[a, i - frac, b, a + 1, i, b + 1, a + 2, i + frac, b + 2],
+		);
+		a += 3;
+		b += 3;
+	}
+
+	median_of_medians(v.slice_mut(s![lo..lo + frac]), is_less, pivot);
+	partition(v, lo + pivot, is_less).0
+}
+
+/// Moves around the 9 elements at the indices a..i, such that
+/// `v[d]` contains the median of the 9 elements and the other
+/// elements are partitioned around it.
+fn ninther<T, F: Fn(&T, &T) -> bool>(mut v: ArrayViewMut1<'_, T>, is_less: &F, n: [usize; 9]) {
+	let [a, mut b, c, mut d, e, mut f, g, mut h, i] = n;
+	b = median_idx(v.view(), is_less, a, b, c);
+	h = median_idx(v.view(), is_less, g, h, i);
+	if is_less(&v[h], &v[b]) {
+		mem::swap(&mut b, &mut h);
+	}
+	if is_less(&v[f], &v[d]) {
+		mem::swap(&mut d, &mut f);
+	}
+	if is_less(&v[e], &v[d]) {
+		// do nothing
+	} else if is_less(&v[f], &v[e]) {
+		d = f;
+	} else {
+		if is_less(&v[e], &v[b]) {
+			v.swap(e, b);
+		} else if is_less(&v[h], &v[e]) {
+			v.swap(e, h);
+		}
+		return;
+	}
+	if is_less(&v[d], &v[b]) {
+		d = b;
+	} else if is_less(&v[h], &v[d]) {
+		d = h;
+	}
+
+	v.swap(d, e);
+}
+
+/// returns the index pointing to the median of the 3
+/// elements `v[a]`, `v[b]` and `v[c]`
+fn median_idx<T, F: Fn(&T, &T) -> bool>(
+	v: ArrayView1<'_, T>,
+	is_less: &F,
+	mut a: usize,
+	b: usize,
+	mut c: usize,
+) -> usize {
+	if is_less(&v[c], &v[a]) {
+		mem::swap(&mut a, &mut c);
+	}
+	if is_less(&v[c], &v[b]) {
+		return c;
+	}
+	if is_less(&v[b], &v[a]) {
+		return a;
+	}
+	b
 }
 
 /// Partitions `v` into elements equal to `v[pivot]` followed by elements greater than `v[pivot]`.
