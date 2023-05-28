@@ -65,39 +65,30 @@ where
 		}
 
 		// Initially, these pointers point to the beginnings of their arrays.
-		//let left = &mut hole.start;
+		let left = &mut hole.start;
 		let mut right = mid; //v_mid
-					 //let out = &mut hole.dest;
+		let out = &mut hole.dest;
 
-		while hole.start < hole.end && right < len {
+		while *left < hole.end && right < len {
 			// Consume the lesser side.
 			// If equal, prefer the left run to maintain stability.
 
 			// SAFETY: left and right must be valid and part of v same for out.
 			unsafe {
 				let w = hole.v.view();
-				let to_copy = if is_less(w.uget(right), &*hole.buf.add(hole.start)) {
-					let idx = &mut right;
-					let old = hole.v.view_mut().index(*idx);
-
-					// SAFETY: ptr.add(1) must still be a valid pointer and part of `v`.
-					*idx += 1; //unsafe { ptr.add(1) };
-					old
+				let is_l = is_less(w.uget(right), &*hole.buf.add(*left));
+				let to_copy = if is_l {
+					w.uget(right)
 				} else {
-					let idx = &mut hole.start;
-					let old = hole.buf.add(*idx);
-
-					// SAFETY: ptr.add(1) must still be a valid pointer and part of `v`.
-					*idx += 1; //unsafe { ptr.add(1) };
-					old
+					&*hole.buf.add(*left)
 				};
-				let idx = &mut hole.dest;
-				let old = hole.v.view_mut().index(*idx);
-
-				// SAFETY: ptr.add(1) must still be a valid pointer and part of `v`.
-				*idx += 1; //unsafe { ptr.add(1) };
-				let dst = old;
-				ptr::copy_nonoverlapping(to_copy, dst, 1);
+				ptr::copy_nonoverlapping(to_copy, hole.v.view_mut().index(*out), 1);
+				*out += 1;
+				if is_l {
+					right += 1;
+				} else {
+					*left += 1;
+				}
 			}
 		}
 	} else {
@@ -118,33 +109,30 @@ where
 		}
 
 		// Initially, these pointers point past the ends of their arrays.
-		//let left = &mut hole.dest;
-		//let right = &mut hole.end;
+		let left = &mut hole.dest;
+		let right = &mut hole.end;
 		let mut out = len; //v_end;
 
-		while 0 < hole.dest && 0 < hole.end {
+		while 0 < *left && 0 < *right {
 			// Consume the greater side.
 			// If equal, prefer the right run to maintain stability.
 
 			// SAFETY: left and right must be valid and part of v same for out.
 			unsafe {
 				let w = hole.v.view();
-				let to_copy = if is_less(&*hole.buf.add(hole.end - 1), w.uget(hole.dest - 1)) {
-					let idx = &mut hole.dest;
-					// SAFETY: ptr.sub(1) must still be a valid pointer and part of `v`.
-					*idx -= 1; //unsafe { ptr.sub(1) };
-					hole.v.view_mut().index(*idx)
+				let is_l = is_less(&*hole.buf.add(*right - 1), w.uget(*left - 1));
+				if is_l {
+					*left -= 1;
 				} else {
-					let idx = &mut hole.end;
-					// SAFETY: ptr.sub(1) must still be a valid pointer and part of `v`.
-					*idx -= 1; //unsafe { ptr.sub(1) };
-					hole.buf.add(*idx)
+					*right -= 1;
+				}
+				let to_copy = if is_l {
+					w.uget(*left)
+				} else {
+					&*hole.buf.add(*right)
 				};
-				let idx = &mut out;
-				// SAFETY: ptr.sub(1) must still be a valid pointer and part of `v`.
-				*idx -= 1; //unsafe { ptr.sub(1) };
-				let dst = hole.v.view_mut().index(*idx);
-				ptr::copy_nonoverlapping(to_copy, dst, 1);
+				out -= 1;
+				ptr::copy_nonoverlapping(to_copy, hole.v.view_mut().index(out), 1);
 			}
 		}
 	}
