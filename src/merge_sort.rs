@@ -549,7 +549,7 @@ where
 }
 
 // Finds a streak of presorted elements starting at the beginning of the slice. Returns the first
-/// value that is not part of said streak, and a bool denoting wether the streak was reversed.
+/// value that is not part of said streak, and a bool denoting whether the streak was reversed.
 /// Streaks can be increasing or decreasing.
 fn find_streak<T, F>(v: ArrayView1<'_, T>, is_less: &mut F) -> (usize, bool)
 where
