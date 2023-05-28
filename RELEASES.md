@@ -1,3 +1,9 @@
+# Version 0.2.3 (2023-05-28)
+
+  * Lower worst-case time complexity from **O**(**n** log **n**) to **O**(**n**)
+    for selection algorithms.
+  * Improve overall sorting performance.
+
 # Version 0.2.2 (2023-04-13)
 
   * Add `rayon` feature for parallel sorting and parallel bulk-selection.
