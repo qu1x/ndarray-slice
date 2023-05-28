@@ -533,6 +533,7 @@ where
 ///
 /// Even if `is_less` panics at any point during the merge process, this function will fully copy
 /// all elements from `left` and `right` into `dest` (not necessarily in sorted order).
+#[warn(unsafe_op_in_unsafe_fn)]
 unsafe fn par_merge<T, F>(
 	mut left: ArrayViewMut1<'_, T>,
 	mut right: ArrayViewMut1<'_, T>,
@@ -585,10 +586,14 @@ unsafe fn par_merge<T, F>(
 			// Consume the lesser side.
 			// If equal, prefer the left run to maintain stability.
 			if is_less(&s.right[s.right_start], &s.left[s.left_start]) {
-				ptr::copy_nonoverlapping(&s.right[s.right_start], &mut s.dest[s.dest_start], 1);
+				unsafe {
+					ptr::copy_nonoverlapping(&s.right[s.right_start], &mut s.dest[s.dest_start], 1)
+				};
 				s.right_start += 1;
 			} else {
-				ptr::copy_nonoverlapping(&s.left[s.left_start], &mut s.dest[s.dest_start], 1);
+				unsafe {
+					ptr::copy_nonoverlapping(&s.left[s.left_start], &mut s.dest[s.dest_start], 1)
+				};
 				s.left_start += 1;
 			};
 			s.dest_start += 1;
@@ -615,8 +620,8 @@ unsafe fn par_merge<T, F>(
 		//let dest_r = SendPtr(dest.add(left_l.len() + right_l.len()));
 		let (dest_l, dest_r) = dest.split_at(Axis(0), left_l.len() + right_l.len());
 		rayon::join(
-			move || par_merge(left_l, right_l, dest_l, is_less),
-			move || par_merge(left_r, right_r, dest_r, is_less),
+			move || unsafe { par_merge(left_l, right_l, dest_l, is_less) },
+			move || unsafe { par_merge(left_r, right_r, dest_r, is_less) },
 		);
 	}
 	// Finally, `s` gets dropped if we used sequential merge, thus copying the remaining elements
@@ -680,6 +685,7 @@ unsafe fn par_merge<T, F>(
 /// must equal the left bound of the following chunk.
 ///
 /// The buffer must be at least as long as `v`.
+#[warn(unsafe_op_in_unsafe_fn)]
 unsafe fn recurse<T, F>(
 	mut v: ArrayViewMut1<'_, T>,
 	mut buf: ArrayViewMut1<'_, T>,
@@ -704,7 +710,7 @@ unsafe fn recurse<T, F>(
 			//let src = v.add(start);
 			//let dest = buf.add(start);
 			for i in start..end {
-				ptr::copy_nonoverlapping(&v[i], &mut buf[i], 1);
+				unsafe { ptr::copy_nonoverlapping(&v[i], &mut buf[i], 1) };
 			}
 		}
 		return;
@@ -750,14 +756,18 @@ unsafe fn recurse<T, F>(
 	//let buf = SendPtr(buf);
 	rayon::join(
 		move || {
-			recurse(
-				v_left, buf_left, /*v.get(), buf.get(),*/ left, !into_buf, is_less,
-			)
+			unsafe {
+				recurse(
+					v_left, buf_left, /*v.get(), buf.get(),*/ left, !into_buf, is_less,
+				)
+			}
 		},
 		move || {
-			recurse(
-				v_right, buf_right, /*v.get(), buf.get(),*/ right, !into_buf, is_less,
-			)
+			unsafe {
+				recurse(
+					v_right, buf_right, /*v.get(), buf.get(),*/ right, !into_buf, is_less,
+				)
+			}
 		},
 	);
 
@@ -770,7 +780,7 @@ unsafe fn recurse<T, F>(
 	//let src_right = slice::from_raw_parts_mut(src.add(mid), end - mid);
 	//par_merge(src_left, src_right, dest.add(start), is_less);
 	let (src_left, src_right) = src.multi_slice_mut((s![start..mid], s![mid..end]));
-	par_merge(src_left, src_right, dest.slice_mut(s![start..]), is_less);
+	unsafe { par_merge(src_left, src_right, dest.slice_mut(s![start..]), is_less) };
 
 	/// When dropped, copies from `src` into `dest` a sequence of length `len`.
 	struct CopyOnDrop<'a, T> {

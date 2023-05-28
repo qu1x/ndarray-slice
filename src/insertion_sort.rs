@@ -41,6 +41,7 @@ impl<T> Drop for InsertionHole<'_, T> {
 
 /// Inserts `v[v.len() - 1]` into pre-sorted sequence `v[..v.len() - 1]` so that whole `v[..]`
 /// becomes sorted.
+#[warn(unsafe_op_in_unsafe_fn)]
 unsafe fn insert_tail<T, F>(mut v: ArrayViewMut1<'_, T>, is_less: &mut F)
 where
 	F: FnMut(&T, &T) -> bool,
@@ -96,6 +97,7 @@ where
 /// Inserts `v[0]` into pre-sorted sequence `v[1..]` so that whole `v[..]` becomes sorted.
 ///
 /// This is the integral subroutine of insertion sort.
+#[warn(unsafe_op_in_unsafe_fn)]
 unsafe fn insert_head<T, F>(mut v: ArrayViewMut1<'_, T>, is_less: &mut F)
 where
 	F: FnMut(&T, &T) -> bool,
