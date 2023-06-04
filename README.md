@@ -96,7 +96,13 @@ See the [release history](RELEASES.md) to keep track of the development.
 
 Copyright © 2023 Rouven Spreckels <rs@qu1x.dev>
 
-This project is licensed under either of
+This project contains derivative works of [`rust`] and [`rayon`]. For full authorship information,
+see their version control histories. Respective copyrights are retained by their contributors.
+
+[`rust`]: https://github.com/rust-lang/rust
+[`rayon`]: https://github.com/rayon-rs/rayon
+
+Like the original works, this project is licensed under either of
 
  * Apache License, Version 2.0, ([LICENSES/Apache-2.0](LICENSES/Apache-2.0) or
    https://www.apache.org/licenses/LICENSE-2.0)
