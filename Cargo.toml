@@ -1,7 +1,7 @@
 [package]
 name = "ndarray-slice"
 version = "0.2.4"
-rust-version = "1.63.0"
+rust-version = "1.65.0"
 edition = "2021"
 authors = ["Rouven Spreckels <rs@qu1x.dev>"]
 description = """Fast and robust slice-based algorithms (e.g., sorting, selection, search)
