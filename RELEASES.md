@@ -1,6 +1,10 @@
+# Version 0.2.4 (2024-01-23)
+
+  * Slightly improve performance of unstable sorting.
+
 # Version 0.2.3 (2023-05-28)
 
-  * Lower worst-case time complexity from **O**(**n** log **n**) to **O**(**n**)
+  * Lower worst-case time complexity from *O*(*n* log *n*) to *O*(*n*)
     for selection algorithms.
   * Improve overall sorting performance.
 

@@ -11,7 +11,7 @@
 [Documentation]: https://docs.rs/ndarray-slice/badge.svg
 [Downloads]: https://img.shields.io/crates/d/ndarray-slice.svg
 [Version]: https://img.shields.io/crates/v/ndarray-slice.svg
-[Rust]: https://img.shields.io/badge/rust-v1.60-brightgreen.svg
+[Rust]: https://img.shields.io/badge/rust-v1.63.0-brightgreen.svg
 [License]: https://img.shields.io/badge/License-MIT%20OR%20Apache--2.0-blue.svg
 
 Fast and robust slice-based algorithms (e.g., [sorting], [selection], [search]) for
