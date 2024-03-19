@@ -10,142 +10,78 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: checkout
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4
+    - name: msrv
+      run: |
+        msrv=$(cargo metadata --no-deps --format-version 1 |
+          jq --raw-output '.packages[] | select(.name=="ndarray-slice") | .rust_version')
+        echo "MSRV=$msrv" >> $GITHUB_ENV
     - name: toolchain
-      uses: actions-rs/toolchain@v1
+      uses: dtolnay/rust-toolchain@master
       with:
-        toolchain: 1.65.0
-        profile: minimal
+        toolchain: ${{ env.MSRV }}
         components: rustfmt, rust-docs, clippy
-        override: true
     - name: test
-      uses: actions-rs/cargo@v1
-      with:
-        command: test
+      run: cargo test
     - name: test-no_std
-      uses: actions-rs/cargo@v1
-      with:
-        command: test
-        args: --no-default-features --features alloc
+      run: cargo test --no-default-features --features alloc
     - name: test-no_alloc
-      uses: actions-rs/cargo@v1
-      with:
-        command: test
-        args: --no-default-features
+      run: cargo test --no-default-features
     - name: test-rayon
-      uses: actions-rs/cargo@v1
-      with:
-        command: test
-        args: --features rayon --
-          par::merge_sort::test::stably_sorted
-          par::quick_sort::test::sorted
-          par::partition::test::at_indices
+      run: cargo test --features rayon -- par::merge_sort::test::stably_sorted par::quick_sort::test::sorted par::partition::test::at_indices
       env:
         QUICKCHECK_GENERATOR_SIZE: 1000000
     - name: clippy
-      uses: actions-rs/cargo@v1
-      with:
-        command: clippy
-        args: --tests
+      run: cargo clippy --tests
     - name: doc
-      uses: actions-rs/cargo@v1
-      with:
-        command: doc
+      run: cargo doc
     - name: doc-no_std
-      uses: actions-rs/cargo@v1
-      with:
-        command: doc
-        args: --no-default-features --features alloc
+      run: cargo doc --no-default-features --features alloc
     - name: doc-no_alloc
-      uses: actions-rs/cargo@v1
-      with:
-        command: doc
-        args: --no-default-features
+      run: cargo doc --no-default-features
     - name: doc-rayon
-      uses: actions-rs/cargo@v1
-      with:
-        command: doc
-        args: --features rayon
+      run: cargo doc --features rayon
     - name: fmt
-      uses: actions-rs/cargo@v1
-      with:
-        command: fmt
-        args: --check
+      run: cargo fmt --check
   nightly:
     runs-on: ubuntu-latest
     steps:
     - name: checkout
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4
     - name: toolchain
-      uses: actions-rs/toolchain@v1
+      uses: dtolnay/rust-toolchain@master
       with:
         toolchain: nightly
-        profile: minimal
         components: rustfmt, rust-docs, clippy, miri
-        override: true
     - name: test
-      uses: actions-rs/cargo@v1
-      with:
-        command: test
+      run: cargo test
     - name: test-no_std
-      uses: actions-rs/cargo@v1
-      with:
-        command: test
-        args: --no-default-features --features alloc
+      run: cargo test --no-default-features --features alloc
     - name: test-no_alloc
-      uses: actions-rs/cargo@v1
-      with:
-        command: test
-        args: --no-default-features
+      run: cargo test --no-default-features
     - name: test-rayon
-      uses: actions-rs/cargo@v1
-      with:
-        command: test
-        args: --features rayon --
-          par::merge_sort::test::stably_sorted
-          par::quick_sort::test::sorted
-          par::partition::test::at_indices
+      run: cargo test --features rayon -- par::merge_sort::test::stably_sorted par::quick_sort::test::sorted par::partition::test::at_indices
       env:
         QUICKCHECK_GENERATOR_SIZE: 1000000
     - name: clippy
-      uses: actions-rs/cargo@v1
-      with:
-        command: clippy
-        args: --tests
+      run: cargo clippy --tests
     - name: doc
-      uses: actions-rs/cargo@v1
-      with:
-        command: doc
+      run: cargo doc
       env:
         RUSTDOCFLAGS: "--cfg docsrs"
     - name: doc-no_std
-      uses: actions-rs/cargo@v1
-      with:
-        command: doc
-        args: --no-default-features --features alloc
+      run: cargo doc --no-default-features --features alloc
       env:
         RUSTDOCFLAGS: "--cfg docsrs"
     - name: doc-no_alloc
-      uses: actions-rs/cargo@v1
-      with:
-        command: doc
-        args: --no-default-features
+      run: cargo doc --no-default-features
       env:
         RUSTDOCFLAGS: "--cfg docsrs"
     - name: doc-rayon
-      uses: actions-rs/cargo@v1
-      with:
-        command: doc
-        args: --features rayon
+      run: cargo doc --features rayon
       env:
         RUSTDOCFLAGS: "--cfg docsrs"
     - name: fmt
-      uses: actions-rs/cargo@v1
-      with:
-        command: fmt
-        args: --check
+      run: cargo fmt --check
     - name: miri
-      uses: actions-rs/cargo@v1
-      with:
-        command: miri
-        args: test -- Slice1Ext
+      run: cargo miri test -- Slice1Ext
