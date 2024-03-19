@@ -1,3 +1,7 @@
+# Version 0.3.0 (2024-03-19)
+
+  * Synchronize with Rust standard library.
+
 # Version 0.2.4 (2024-01-23)
 
   * Slightly improve performance of unstable sorting.

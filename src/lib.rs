@@ -104,7 +104,7 @@ use crate::{
 	partition_dedup::partition_dedup,
 	quick_sort::quick_sort,
 };
-use core::cmp::Ordering::{self, Greater, Less};
+use core::cmp::Ordering::{self, Equal, Greater, Less};
 use ndarray::{ArrayBase, ArrayViewMut1, Data, DataMut, Ix1};
 
 pub use ndarray;
@@ -257,7 +257,7 @@ where
 	/// ```
 	/// use ndarray_slice::{ndarray::arr1, Slice1Ext};
 	///
-	/// let mut v = arr1(&[-5i32, 4, 1, -3, 2]);
+	/// let mut v = arr1(&[-5i32, 4, 2, -3, 1]);
 	///
 	/// v.par_sort_by_key(|k| k.abs());
 	/// assert!(v == arr1(&[1, 2, -3, 4, -5]));
@@ -438,7 +438,7 @@ where
 	/// ```
 	/// use ndarray_slice::{ndarray::arr1, Slice1Ext};
 	///
-	/// let mut v = arr1(&[-5i32, 4, 1, -3, 2]);
+	/// let mut v = arr1(&[-5i32, 4, 2, -3, 1]);
 	///
 	/// v.sort_by_key(|k| k.abs());
 	/// assert!(v == arr1(&[1, 2, -3, 4, -5]));
@@ -619,7 +619,7 @@ where
 	/// ```
 	/// use ndarray_slice::{ndarray::arr1, Slice1Ext};
 	///
-	/// let mut v = arr1(&[-5i32, 4, 1, -3, 2]);
+	/// let mut v = arr1(&[-5i32, 4, 2, -3, 1]);
 	///
 	/// v.par_sort_unstable_by_key(|k| k.abs());
 	/// assert!(v == arr1(&[1, 2, -3, 4, -5]));
@@ -744,7 +744,7 @@ where
 	/// ```
 	/// use ndarray_slice::{ndarray::arr1, Slice1Ext};
 	///
-	/// let mut v = arr1(&[-5i32, 4, 1, -3, 2]);
+	/// let mut v = arr1(&[-5i32, 4, 2, -3, 1]);
 	///
 	/// v.sort_unstable_by_key(|k| k.abs());
 	/// assert!(v == arr1(&[1, 2, -3, 4, -5]));
@@ -786,14 +786,27 @@ where
 	/// Checks if the elements of this array are sorted using the given comparator function.
 	///
 	/// Instead of using `PartialOrd::partial_cmp`, this function uses the given `compare`
-	/// function to determine the ordering of two elements. Apart from that, it's equivalent to
-	/// [`is_sorted`]; see its documentation for more information.
+	/// function to determine whether two elements are to be considered in sorted order.
 	///
-	/// [`is_sorted`]: Slice1Ext::is_sorted
+	/// # Examples
+	///
+	/// ```
+	/// use ndarray_slice::{ndarray::arr1, Slice1Ext};
+	///
+	/// assert!(arr1(&[1, 2, 2, 9]).is_sorted_by(|a, b| a <= b));
+	/// assert!(!arr1(&[1, 2, 2, 9]).is_sorted_by(|a, b| a < b));
+	///
+	/// assert!(arr1(&[0]).is_sorted_by(|a, b| true));
+	/// assert!(arr1(&[0]).is_sorted_by(|a, b| false));
+	///
+	/// let empty: [i32; 0] = [];
+	/// assert!(arr1(&empty).is_sorted_by(|a, b| false));
+	/// assert!(arr1(&empty).is_sorted_by(|a, b| true));
+	/// ```
 	#[must_use]
 	fn is_sorted_by<F>(&self, compare: F) -> bool
 	where
-		F: FnMut(&A, &A) -> Option<Ordering>;
+		F: FnMut(&A, &A) -> bool;
 	/// Checks if the elements of this array are sorted using the given key extraction function.
 	///
 	/// Instead of comparing the array's elements directly, this function compares the keys of the
@@ -845,7 +858,7 @@ where
 	/// ```
 	/// use ndarray_slice::{ndarray::arr1, Slice1Ext};
 	///
-	/// let mut v = arr1(&[-5i32, 4, 1, -3, 2, 9, 3, 4, 0]);
+	/// let mut v = arr1(&[-5i32, 4, 2, -3, 1, 9, 3, 4, 0]);
 	///
 	/// // Find values at following indices.
 	/// let indices = arr1(&[1, 4, 6]);
@@ -895,7 +908,7 @@ where
 	/// use ndarray_slice::{ndarray::arr1, Slice1Ext};
 	/// use std::collections::HashMap;
 	///
-	/// let mut v = arr1(&[-5i32, 4, 1, -3, 2, 9, 3, 4, 0]);
+	/// let mut v = arr1(&[-5i32, 4, 2, -3, 1, 9, 3, 4, 0]);
 	///
 	/// // Find values at following indices.
 	/// let indices = arr1(&[1, 4, 6]);
@@ -947,7 +960,7 @@ where
 	/// use ndarray_slice::{ndarray::arr1, Slice1Ext};
 	/// use std::collections::HashMap;
 	///
-	/// let mut v = arr1(&[-5i32, 4, 1, -3, 2, 9, 3, 4, 0]);
+	/// let mut v = arr1(&[-5i32, 4, 2, -3, 1, 9, 3, 4, 0]);
 	///
 	/// // Find values at following indices.
 	/// let indices = arr1(&[1, 4, 6]);
@@ -1000,7 +1013,7 @@ where
 	/// use ndarray_slice::{ndarray::arr1, Slice1Ext};
 	/// use std::collections::HashMap;
 	///
-	/// let mut v = arr1(&[-5i32, 4, 1, -3, 2, 9, 3, 4, 0]);
+	/// let mut v = arr1(&[-5i32, 4, 2, -3, 1, 9, 3, 4, 0]);
 	///
 	/// // Find values at following indices.
 	/// let indices = arr1(&[1, 4, 6]);
@@ -1051,7 +1064,7 @@ where
 	/// use ndarray_slice::{ndarray::arr1, Slice1Ext};
 	/// use std::collections::HashMap;
 	///
-	/// let mut v = arr1(&[-5i32, 4, 1, -3, 2, 9, 3, 4, 0]);
+	/// let mut v = arr1(&[-5i32, 4, 2, -3, 1, 9, 3, 4, 0]);
 	///
 	/// // Find values at following indices.
 	/// let indices = arr1(&[1, 4, 6]);
@@ -1104,7 +1117,7 @@ where
 	/// use ndarray_slice::{ndarray::arr1, Slice1Ext};
 	/// use std::collections::HashMap;
 	///
-	/// let mut v = arr1(&[-5i32, 4, 1, -3, 2, 9, 3, 4, 0]);
+	/// let mut v = arr1(&[-5i32, 4, 2, -3, 1, 9, 3, 4, 0]);
 	///
 	/// // Find values at following indices.
 	/// let indices = arr1(&[1, 4, 6]);
@@ -1127,7 +1140,7 @@ where
 		F: FnMut(&A) -> K,
 		S: DataMut,
 		S2: Data<Elem = usize>;
-	/// Reorder the array such that the element at `index` is at its final sorted position.
+	/// Reorder the array such that the element at `index` after the reordering is at its final sorted position.
 	///
 	/// This reordering has the additional property that any value at position `i < index` will be
 	/// less than or equal to any value at a position `j > index`. Additionally, this reordering is
@@ -1157,10 +1170,15 @@ where
 	/// ```
 	/// use ndarray_slice::{ndarray::arr1, Slice1Ext};
 	///
-	/// let mut v = arr1(&[-5i32, 4, 1, -3, 2]);
+	/// let mut v = arr1(&[-5i32, 4, 2, -3, 1]);
 	///
-	/// // Find the median
-	/// v.select_nth_unstable(2);
+	/// // Find the items less than or equal to the median, the median, and greater than or equal to
+	/// // the median.
+	/// let (lesser, median, greater) = v.select_nth_unstable(2);
+	///
+	/// assert!(lesser == arr1(&[-3, -5]) || lesser == arr1(&[-5, -3]));
+	/// assert_eq!(median, &mut 1);
+	/// assert!(greater == arr1(&[4, 2]) || greater == arr1(&[2, 4]));
 	///
 	/// // We are only guaranteed the array will be one of the following, based on the way we sort
 	/// // about the specified index.
@@ -1177,8 +1195,8 @@ where
 	where
 		A: Ord,
 		S: DataMut;
-	/// Reorder the array with a comparator function such that the element at `index` is at its
-	/// final sorted position.
+	/// Reorder the array with a comparator function such that the element at `index` after the reordering is at
+	/// its final sorted position.
 	///
 	/// This reordering has the additional property that any value at position `i < index` will be
 	/// less than or equal to any value at a position `j > index` using the comparator function.
@@ -1209,10 +1227,17 @@ where
 	/// ```
 	/// use ndarray_slice::{ndarray::arr1, Slice1Ext};
 	///
-	/// let mut v = arr1(&[-5i32, 4, 1, -3, 2]);
+	/// let mut v = arr1(&[-5i32, 4, 2, -3, 1]);
 	///
 	/// // Find the median as if the array were sorted in descending order.
 	/// v.select_nth_unstable_by(2, |a, b| b.cmp(a));
+	/// // Find the items less than or equal to the median, the median, and greater than or equal to
+	/// // the median as if the slice were sorted in descending order.
+	/// let (lesser, median, greater) = v.select_nth_unstable_by(2, |a, b| b.cmp(a));
+	///
+	/// assert!(lesser == arr1(&[4, 2]) || lesser == arr1(&[2, 4]));
+	/// assert_eq!(median, &mut 1);
+	/// assert!(greater == arr1(&[-3, -5]) || greater == arr1(&[-5, -3]));
 	///
 	/// // We are only guaranteed the array will be one of the following, based on the way we sort
 	/// // about the specified index.
@@ -1230,8 +1255,8 @@ where
 	where
 		F: FnMut(&A, &A) -> Ordering,
 		S: DataMut;
-	/// Reorder the array with a key extraction function such that the element at `index` is at its
-	/// final sorted position.
+	/// Reorder the array with a key extraction function such that the element at `index` after the reordering is
+	/// at its final sorted position.
 	///
 	/// This reordering has the additional property that any value at position `i < index` will be
 	/// less than or equal to any value at a position `j > index` using the key extraction function.
@@ -1262,10 +1287,17 @@ where
 	/// ```
 	/// use ndarray_slice::{ndarray::arr1, Slice1Ext};
 	///
-	/// let mut v = arr1(&[-5i32, 4, 1, -3, 2]);
+	/// let mut v = arr1(&[-5i32, 4, 2, -3, 1]);
 	///
 	/// // Return the median as if the array were sorted according to absolute value.
 	/// v.select_nth_unstable_by_key(2, |a| a.abs());
+	/// // Find the items less than or equal to the median, the median, and greater than or equal to
+	/// // the median as if the slice were sorted according to absolute value.
+	/// let (lesser, median, greater) = v.select_nth_unstable_by_key(2, |a| a.abs());
+	///
+	/// assert!(lesser == arr1(&[1, 2]) || lesser == arr1(&[2, 1]));
+	/// assert_eq!(median, &mut -3);
+	/// assert!(greater == arr1(&[4, -5]) || greater == arr1(&[-5, 4]));
 	///
 	/// // We are only guaranteed the array will be one of the following, based on the way we sort
 	/// // about the specified index.
@@ -1910,12 +1942,12 @@ where
 	where
 		A: PartialOrd,
 	{
-		is_sorted(self.view(), |a, b| a.partial_cmp(b))
+		is_sorted(self.view(), |a, b| a <= b)
 	}
 	#[inline]
 	fn is_sorted_by<F>(&self, compare: F) -> bool
 	where
-		F: FnMut(&A, &A) -> Option<Ordering>,
+		F: FnMut(&A, &A) -> bool,
 	{
 		is_sorted(self.view(), compare)
 	}
@@ -1925,7 +1957,7 @@ where
 		F: FnMut(&A) -> K,
 		K: PartialOrd,
 	{
-		is_sorted(self.view(), |a, b| f(a).partial_cmp(&f(b)))
+		is_sorted(self.view(), |a, b| f(a) <= f(b))
 	}
 
 	#[cfg(feature = "rayon")]
@@ -2134,14 +2166,13 @@ where
 			// we have `left + size/2 < self.len()`, and this is in-bounds.
 			let cmp = f(unsafe { self.uget(mid) });
 
-			// The reason why we use if/else control flow rather than match
-			// is because match reorders comparison operations, which is perf sensitive.
-			// This is x86 asm for u8: https://rust.godbolt.org/z/8Y8Pra.
-			if cmp == Less {
-				left = mid + 1;
-			} else if cmp == Greater {
-				right = mid;
-			} else {
+			// This control flow produces conditional moves, which results in
+			// fewer branches and instructions than if/else or matching on
+			// cmp::Ordering.
+			// This is x86 asm for u8: https://rust.godbolt.org/z/698eYffTx.
+			left = if cmp == Less { mid + 1 } else { left };
+			right = if cmp == Greater { mid } else { right };
+			if cmp == Equal {
 				// SAFETY: same as the `get_unchecked` above
 				//unsafe { crate::intrinsics::assume(mid < self.len()) };
 				debug_assert!(mid < self.len());

@@ -6,7 +6,7 @@ use crate::insertion_sort::insertion_sort_shift_left;
 use core::{
 	cmp::{
 		self,
-		Ordering::{self, Equal, Greater, Less},
+		Ordering::{Equal, Greater, Less},
 	},
 	mem::{self, ManuallyDrop, MaybeUninit},
 	ptr,
@@ -752,11 +752,11 @@ where
 
 pub fn is_sorted<T, F>(v: ArrayView1<'_, T>, mut compare: F) -> bool
 where
-	F: FnMut(&T, &T) -> Option<Ordering>,
+	F: FnMut(&T, &T) -> bool,
 {
 	for i in 1..v.len() {
 		let [a, b] = [&v[i - 1], &v[i]];
-		if !compare(a, b).map_or(false, Ordering::is_le) {
+		if !compare(a, b) {
 			return false;
 		}
 	}
