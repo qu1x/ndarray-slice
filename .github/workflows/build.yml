@@ -84,4 +84,4 @@ jobs:
     - name: fmt
       run: cargo fmt --check
     - name: miri
-      run: cargo miri test -- Slice1Ext
+      run: cargo miri test --no-default-features --features std -- Slice1Ext

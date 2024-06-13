@@ -4,6 +4,7 @@
 
 use crate::{
 	insertion_sort::InsertionHole,
+	maybe_grow,
 	par::insertion_sort::insertion_sort_shift_left,
 	partition::{break_patterns, reverse},
 };
@@ -48,15 +49,31 @@ pub fn par_partition_at_indices<'a, T, F>(
 		let (left_values, right_values) = values.split_at_mut(at);
 		let right_values = &mut right_values[1..];
 		if at == 0 || pivot - offset <= MAX_SEQUENTIAL {
-			par_partition_at_indices(left, offset, left_indices, left_values, is_less);
+			maybe_grow(|| {
+				par_partition_at_indices(left, offset, left_indices, left_values, is_less)
+			});
 			v = right;
 			offset = pivot + 1;
 			indices = right_indices;
 			values = right_values;
 		} else {
 			rayon::join(
-				|| par_partition_at_indices(left, offset, left_indices, left_values, is_less),
-				|| par_partition_at_indices(right, pivot + 1, right_indices, right_values, is_less),
+				|| {
+					maybe_grow(|| {
+						par_partition_at_indices(left, offset, left_indices, left_values, is_less)
+					})
+				},
+				|| {
+					maybe_grow(|| {
+						par_partition_at_indices(
+							right,
+							pivot + 1,
+							right_indices,
+							right_values,
+							is_less,
+						)
+					})
+				},
 			);
 			break;
 		}
@@ -641,15 +658,15 @@ where
 
 		if count > 0 {
 			macro_rules! left {
-                () => {
-                    v.view_mut().index(l + usize::from(*start_l)) as *mut T //l.add(usize::from(*start_l))
-                };
-            }
+				() => {
+					v.view_mut().index(l + usize::from(*start_l)) as *mut T //l.add(usize::from(*start_l))
+				};
+			}
 			macro_rules! right {
-                () => {
-                    v.view_mut().index(r - (usize::from(*start_r) + 1)) as *mut T //r.sub(usize::from(*start_r) + 1)
-                };
-            }
+				() => {
+					v.view_mut().index(r - (usize::from(*start_r) + 1)) as *mut T //r.sub(usize::from(*start_r) + 1)
+				};
+			}
 
 			// Instead of swapping one pair at the time, it is more efficient to perform a cyclic
 			// permutation. This is not strictly equivalent to swapping, but produces a similar

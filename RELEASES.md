@@ -1,3 +1,7 @@
+# Version 0.3.1 (2024-06-13)
+
+  * Spill recursion stack over to heap if necessary.
+
 # Version 0.3.0 (2024-03-19)
 
   * Synchronize with Rust standard library.

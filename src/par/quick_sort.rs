@@ -3,6 +3,7 @@
 //! [`rayon::slice::quicksort`]: https://docs.rs/rayon/latest/src/rayon/slice/quicksort.rs.html
 
 use crate::{
+	maybe_grow,
 	par::{
 		heap_sort::heap_sort,
 		insertion_sort::{insertion_sort_shift_left, partial_insertion_sort},
@@ -123,18 +124,18 @@ fn recurse<'a, T, F>(
 			// calls and consume less stack space. Then just continue with the longer side (this is
 			// akin to tail recursion).
 			if left.len() < right.len() {
-				recurse(left, is_less, pred, limit);
+				maybe_grow(|| recurse(left, is_less, pred, limit));
 				v = right;
 				pred = Some(pivot);
 			} else {
-				recurse(right, is_less, Some(pivot), limit);
+				maybe_grow(|| recurse(right, is_less, Some(pivot), limit));
 				v = left;
 			}
 		} else {
 			// Sort the left and right half in parallel.
 			rayon::join(
-				|| recurse(left, is_less, pred, limit),
-				|| recurse(right, is_less, Some(pivot), limit),
+				|| maybe_grow(|| recurse(left, is_less, pred, limit)),
+				|| maybe_grow(|| recurse(right, is_less, Some(pivot), limit)),
 			);
 			break;
 		}

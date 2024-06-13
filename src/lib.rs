@@ -70,6 +70,7 @@
 //!
 //!   * `alloc` for stable `sort`/`sort_by`/`sort_by_key`. Enabled by `std`.
 //!   * `std` for stable `sort_by_cached_key`. Enabled by `default` or `rayon`.
+//!   * `stacker` for spilling recursion stack over to heap if necessary. Enabled by `default`.
 //!   * `rayon` for parallel `par_sort*`/`par_select_many_nth_unstable*`.
 
 #![deny(
@@ -80,6 +81,18 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(docsrs, feature(doc_auto_cfg))]
 #![cfg_attr(miri, feature(strict_provenance), feature(maybe_uninit_slice))]
+
+#[inline(always)]
+fn maybe_grow<R, F: FnOnce() -> R>(callback: F) -> R {
+	#[cfg(feature = "stacker")]
+	{
+		stacker::maybe_grow(32 * 1_024, 1_024 * 1_024, callback)
+	}
+	#[cfg(not(feature = "stacker"))]
+	{
+		callback()
+	}
+}
 
 mod heap_sort;
 mod insertion_sort;

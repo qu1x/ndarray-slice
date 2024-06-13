@@ -2,7 +2,7 @@
 //!
 //! [`core::slice::sort`]: https://doc.rust-lang.org/src/core/slice/sort.rs.html
 
-use crate::insertion_sort::insertion_sort_shift_left;
+use crate::{insertion_sort::insertion_sort_shift_left, maybe_grow};
 use core::{
 	cmp::{
 		self,
@@ -33,7 +33,7 @@ pub fn partition_at_indices<'a, T, E, F>(
 		let (index, right_indices) = right_indices.split_at(Axis(0), 1);
 		let pivot = *index.index(0);
 		let (left, value, right) = partition_at_index(v, pivot - offset, is_less);
-		partition_at_indices(left, offset, left_indices, collection, is_less);
+		maybe_grow(|| partition_at_indices(left, offset, left_indices, collection, is_less));
 		collection.extend([(pivot, value)]);
 		v = right;
 		offset = pivot + 1;

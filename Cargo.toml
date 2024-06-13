@@ -1,6 +1,6 @@
 [package]
 name = "ndarray-slice"
-version = "0.3.0"
+version = "0.3.1"
 rust-version = "1.65.0"
 edition = "2021"
 authors = ["Rouven Spreckels <rs@qu1x.dev>"]
@@ -37,7 +37,8 @@ rustdoc-args = ["--cfg", "docsrs"]
 
 [dependencies]
 ndarray = { version = "0.15.6", default-features = false }
-rayon = { version = "1.9.0", optional = true }
+stacker = { version = "0.1.15", optional = true }
+rayon = { version = "1.10.0", optional = true }
 
 [dev-dependencies]
 quickcheck = "1.0.3"
@@ -45,7 +46,7 @@ quickcheck_macros = "1.0.0"
 rand = "0.8.5"
 
 [features]
-default = ["std"]
+default = ["std", "stacker"]
 alloc = []
 std = ["alloc", "ndarray/std"]
 rayon = ["dep:rayon", "ndarray/rayon", "std"]

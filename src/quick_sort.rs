@@ -6,6 +6,7 @@ use crate::{
 	heap_sort::heap_sort,
 	insertion_sort::insertion_sort_shift_left,
 	insertion_sort::partial_insertion_sort,
+	maybe_grow,
 	partition::{break_patterns, choose_pivot, partition, partition_equal},
 };
 use core::{cmp, mem};
@@ -115,11 +116,11 @@ fn recurse<'a, T, F>(
 		// calls and consume less stack space. Then just continue with the longer side (this is
 		// akin to tail recursion).
 		if left.len() < right.len() {
-			recurse(left, is_less, pred, limit);
+			maybe_grow(|| recurse(left, is_less, pred, limit));
 			v = right;
 			pred = Some(pivot);
 		} else {
-			recurse(right, is_less, Some(pivot), limit);
+			maybe_grow(|| recurse(right, is_less, Some(pivot), limit));
 			v = left;
 		}
 	}

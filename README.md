@@ -90,6 +90,7 @@ See the [release history](RELEASES.md) to keep track of the development.
 
   * `alloc` for stable `sort`/`sort_by`/`sort_by_key`. Enabled by `std`.
   * `std` for stable `sort_by_cached_key`. Enabled by `default` or `rayon`.
+  * `stacker` for spilling recursion stack over to heap if necessary. Enabled by `default`.
   * `rayon` for parallel `par_sort*`/`par_select_many_nth_unstable*`.
 
 # License
