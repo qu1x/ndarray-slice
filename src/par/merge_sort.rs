@@ -171,7 +171,8 @@ where
 		// Initially, these pointers point to the beginnings of their arrays.
 		//let left = &mut hole.start;
 		let mut right = mid; //v_mid
-					 //let out = &mut hole.dest;
+
+		//let out = &mut hole.dest;
 
 		while hole.start < hole.end && right < len {
 			// Consume the lesser side.
