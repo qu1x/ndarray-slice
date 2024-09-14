@@ -1,3 +1,7 @@
+# Version 0.4.0 (2024-09-14)
+
+  * Bump dependencies.
+
 # Version 0.3.1 (2024-06-13)
 
   * Spill recursion stack over to heap if necessary.
