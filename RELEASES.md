@@ -1,5 +1,6 @@
 # Version 0.4.0 (2024-09-14)
 
+  * Fix doc links.
   * Bump dependencies.
 
 # Version 0.3.1 (2024-06-13)

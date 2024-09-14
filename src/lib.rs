@@ -1565,8 +1565,7 @@ where
 		feature = "alloc",
 		doc = "\
 	    Assumes that the array is sorted by the key, for instance with
-	    [`sort_by_key`] using the same key extraction function.
-	"
+	    [`sort_by_key`] using the same key extraction function."
 	)]
 	///
 	/// If the value is found then [`Result::Ok`] is returned, containing the
@@ -1583,8 +1582,7 @@ where
 	#[cfg_attr(
 		feature = "alloc",
 		doc = "\
-	    [`sort_by_key`]: Slice1Ext::sort_by_key
-	"
+	    [`sort_by_key`]: Slice1Ext::sort_by_key"
 	)]
 	/// [`binary_search`]: Slice1Ext::binary_search
 	/// [`binary_search_by`]: Slice1Ext::binary_search_by
