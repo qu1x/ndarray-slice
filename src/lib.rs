@@ -76,7 +76,7 @@
 )]
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(docsrs, feature(doc_auto_cfg))]
-#![cfg_attr(miri, feature(strict_provenance), feature(maybe_uninit_slice))]
+#![cfg_attr(miri, feature(maybe_uninit_slice))]
 
 #[inline(always)]
 fn maybe_grow<R, F: FnOnce() -> R>(callback: F) -> R {
@@ -1381,9 +1381,10 @@ where
 	/// let mut s = array![0, 1, 1, 1, 1, 2, 3, 5, 8, 13, 21, 34, 55];
 	/// let num = 42;
 	/// let idx = s.partition_point(|&x| x < num);
-	/// let mut s = s.into_raw_vec();
-	/// s.insert(idx, num);
-	/// assert_eq!(s, [0, 1, 1, 1, 1, 2, 3, 5, 8, 13, 21, 34, 42, 55]);
+	/// let (mut s, off) = s.into_raw_vec_and_offset();
+	/// let off = off.unwrap_or_default();
+	/// s.insert(off + idx, num);
+	/// assert_eq!(s[off..], [0, 1, 1, 1, 1, 2, 3, 5, 8, 13, 21, 34, 42, 55]);
 	/// ```
 	#[must_use]
 	fn partition_point<P>(&self, pred: P) -> usize
@@ -1500,9 +1501,10 @@ where
 	/// let num = 42;
 	/// let idx = s.partition_point(|&x| x < num);
 	/// // The above is equivalent to `let idx = s.binary_search(&num).unwrap_or_else(|x| x);`
-	/// let mut s = s.into_raw_vec();
-	/// s.insert(idx, num);
-	/// assert_eq!(s, [0, 1, 1, 1, 1, 2, 3, 5, 8, 13, 21, 34, 42, 55]);
+	/// let (mut s, off) = s.into_raw_vec_and_offset();
+	/// let off = off.unwrap_or_default();
+	/// s.insert(off + idx, num);
+	/// assert_eq!(s[off..], [0, 1, 1, 1, 1, 2, 3, 5, 8, 13, 21, 34, 42, 55]);
 	/// ```
 	fn binary_search(&self, x: &A) -> Result<usize, usize>
 	where
