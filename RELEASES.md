@@ -1,3 +1,7 @@
+# Version 0.5.1 (2025-02-22)
+
+  * Fix build with `rayon` feature.
+
 # Version 0.5.0 (2025-02-22)
 
   * Rust Edition 2024.

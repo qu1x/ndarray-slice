@@ -295,7 +295,7 @@ where
 	//    }
 	//}
 
-	impl<'a, T> Drop for MergeHole<'a, T> {
+	impl<T> Drop for MergeHole<'_, T> {
 		fn drop(&mut self) {
 			// SAFETY: `T` is not a zero-sized type, and these are pointers into a slice's elements.
 			unsafe {
@@ -389,86 +389,88 @@ where
 	T: Send,
 	F: Fn(&T, &T) -> bool,
 {
-	// Very short runs are extended using insertion sort to span at least this many elements.
-	const MIN_RUN: usize = 10;
+	unsafe {
+		// Very short runs are extended using insertion sort to span at least this many elements.
+		const MIN_RUN: usize = 10;
 
-	let len = v.len();
+		let len = v.len();
 
-	// In order to identify natural runs in `v`, we traverse it backwards. That might seem like a
-	// strange decision, but consider the fact that merges more often go in the opposite direction
-	// (forwards). According to benchmarks, merging forwards is slightly faster than merging
-	// backwards. To conclude, identifying runs by traversing backwards improves performance.
-	let mut runs = vec![];
-	let mut end = len;
-	while end > 0 {
-		// Find the next natural run, and reverse it if it's strictly descending.
-		let mut start = end - 1;
+		// In order to identify natural runs in `v`, we traverse it backwards. That might seem like a
+		// strange decision, but consider the fact that merges more often go in the opposite direction
+		// (forwards). According to benchmarks, merging forwards is slightly faster than merging
+		// backwards. To conclude, identifying runs by traversing backwards improves performance.
+		let mut runs = vec![];
+		let mut end = len;
+		while end > 0 {
+			// Find the next natural run, and reverse it if it's strictly descending.
+			let mut start = end - 1;
 
-		if start > 0 {
-			start -= 1;
+			if start > 0 {
+				start -= 1;
 
-			let w = v.view();
-			if is_less(w.uget(start + 1), w.uget(start)) {
-				while start > 0 && is_less(w.uget(start), w.uget(start - 1)) {
-					start -= 1;
-				}
+				let w = v.view();
+				if is_less(w.uget(start + 1), w.uget(start)) {
+					while start > 0 && is_less(w.uget(start), w.uget(start - 1)) {
+						start -= 1;
+					}
 
-				// If this descending run covers the whole slice, return immediately.
-				if start == 0 && end == len {
-					return MergesortResult::Descending;
+					// If this descending run covers the whole slice, return immediately.
+					if start == 0 && end == len {
+						return MergesortResult::Descending;
+					} else {
+						reverse(v.slice_mut(s![start..end]));
+					}
 				} else {
-					reverse(v.slice_mut(s![start..end]));
-				}
-			} else {
-				while start > 0 && !is_less(w.uget(start), w.uget(start - 1)) {
-					start -= 1;
-				}
+					while start > 0 && !is_less(w.uget(start), w.uget(start - 1)) {
+						start -= 1;
+					}
 
-				// If this non-descending run covers the whole slice, return immediately.
-				if end - start == len {
-					return MergesortResult::NonDescending;
+					// If this non-descending run covers the whole slice, return immediately.
+					if end - start == len {
+						return MergesortResult::NonDescending;
+					}
 				}
+			}
+
+			// Insert some more elements into the run if it's too short. Insertion sort is faster than
+			// merge sort on short sequences, so this significantly improves performance.
+			while start > 0 && end - start < MIN_RUN {
+				start -= 1;
+				insert_head(v.slice_mut(s![start..end]), &is_less);
+			}
+
+			// Push this run onto the stack.
+			runs.push(Run {
+				start,
+				len: end - start,
+			});
+			end = start;
+
+			// Merge some pairs of adjacent runs to satisfy the invariants.
+			while let Some(r) = collapse(&runs) {
+				let left = runs[r + 1];
+				let right = runs[r];
+				merge(
+					v.slice_mut(s![left.start..right.start + right.len]),
+					left.len,
+					buf,
+					&is_less,
+				);
+
+				runs[r] = Run {
+					start: left.start,
+					len: left.len + right.len,
+				};
+				runs.remove(r + 1);
 			}
 		}
 
-		// Insert some more elements into the run if it's too short. Insertion sort is faster than
-		// merge sort on short sequences, so this significantly improves performance.
-		while start > 0 && end - start < MIN_RUN {
-			start -= 1;
-			insert_head(v.slice_mut(s![start..end]), &is_less);
-		}
+		// Finally, exactly one run must remain in the stack.
+		debug_assert!(runs.len() == 1 && runs[0].start == 0 && runs[0].len == len);
 
-		// Push this run onto the stack.
-		runs.push(Run {
-			start,
-			len: end - start,
-		});
-		end = start;
-
-		// Merge some pairs of adjacent runs to satisfy the invariants.
-		while let Some(r) = collapse(&runs) {
-			let left = runs[r + 1];
-			let right = runs[r];
-			merge(
-				v.slice_mut(s![left.start..right.start + right.len]),
-				left.len,
-				buf,
-				&is_less,
-			);
-
-			runs[r] = Run {
-				start: left.start,
-				len: left.len + right.len,
-			};
-			runs.remove(r + 1);
-		}
+		// The original order of the slice was neither non-descending nor descending.
+		MergesortResult::Sorted
 	}
-
-	// Finally, exactly one run must remain in the stack.
-	debug_assert!(runs.len() == 1 && runs[0].start == 0 && runs[0].len == len);
-
-	// The original order of the slice was neither non-descending nor descending.
-	MergesortResult::Sorted
 }
 
 ////////////////////////////////////////////////////////////////////////////
@@ -644,7 +646,7 @@ unsafe fn par_merge<T, F>(
 		dest_start: usize,
 	}
 
-	impl<'a, T> Drop for State<'a, T> {
+	impl<T> Drop for State<'_, T> {
 		fn drop(&mut self) {
 			//let size = size_of::<T>();
 			//let left_len = (self.left_end as usize - self.left_start as usize) / size;
@@ -792,7 +794,7 @@ unsafe fn recurse<T, F>(
 		len: usize,
 	}
 
-	impl<'a, T> Drop for CopyOnDrop<'a, T> {
+	impl<T> Drop for CopyOnDrop<'_, T> {
 		fn drop(&mut self) {
 			unsafe {
 				for i in 0..self.len {
@@ -922,8 +924,8 @@ mod test {
 	use core::cmp::Ordering;
 	use ndarray::{Array1, ArrayView1, s};
 	use quickcheck_macros::quickcheck;
-	use rand::distributions::Uniform;
-	use rand::{Rng, thread_rng};
+	use rand::distr::Uniform;
+	use rand::{Rng, rng};
 
 	#[test]
 	fn split() {
@@ -948,19 +950,19 @@ mod test {
 		check(&[1, 2, 2, 2, 2, 3], &[]);
 		check(&[], &[1, 2, 2, 2, 2, 3]);
 
-		let rng = &mut thread_rng();
+		let rng = &mut rng();
 
 		for _ in 0..100 {
-			let limit: u32 = rng.gen_range(1..21);
-			let left_len: usize = rng.gen_range(0..20);
-			let right_len: usize = rng.gen_range(0..20);
+			let limit: u32 = rng.random_range(1..21);
+			let left_len: usize = rng.random_range(0..20);
+			let right_len: usize = rng.random_range(0..20);
 
 			let mut left = rng
-				.sample_iter(&Uniform::new(0, limit))
+				.sample_iter(&Uniform::new(0, limit).unwrap())
 				.take(left_len)
 				.collect::<Vec<_>>();
 			let mut right = rng
-				.sample_iter(&Uniform::new(0, limit))
+				.sample_iter(&Uniform::new(0, limit).unwrap())
 				.take(right_len)
 				.collect::<Vec<_>>();
 
