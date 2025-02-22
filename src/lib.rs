@@ -55,10 +55,6 @@
 //! [selection]: https://en.wikipedia.org/wiki/Selection_algorithm
 //! [search]: https://en.wikipedia.org/wiki/Search_algorithm
 //!
-//! [`sort`]: Slice1Ext::sort
-//! [`sort_unstable`]: Slice1Ext::sort_unstable
-//! [`select_nth_unstable`]: Slice1Ext::select_nth_unstable
-//!
 //! # Roadmap
 //!
 //!   * Add `SliceExt` trait for *n*-dimensional array or (sub)view with methods expecting `Axis` as
