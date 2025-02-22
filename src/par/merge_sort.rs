@@ -7,7 +7,7 @@ use core::{
 	mem::{self, size_of},
 	ptr,
 };
-use ndarray::{s, ArrayView1, ArrayViewMut1, Axis, IndexLonger};
+use ndarray::{ArrayView1, ArrayViewMut1, Axis, IndexLonger, s};
 use rayon::iter::{ParallelBridge, ParallelIterator};
 
 /// We need to transmit raw pointers across threads. It is possible to do this
@@ -920,10 +920,10 @@ where
 mod test {
 	use super::{par_merge_sort, split_for_merge};
 	use core::cmp::Ordering;
-	use ndarray::{s, Array1, ArrayView1};
+	use ndarray::{Array1, ArrayView1, s};
 	use quickcheck_macros::quickcheck;
 	use rand::distributions::Uniform;
-	use rand::{thread_rng, Rng};
+	use rand::{Rng, thread_rng};
 
 	#[test]
 	fn split() {
@@ -931,14 +931,17 @@ mod test {
 			let left = ArrayView1::from_shape(left.len(), left).unwrap();
 			let right = ArrayView1::from_shape(right.len(), right).unwrap();
 			let (l, r) = split_for_merge(left, right, &|&a, &b| a < b);
-			assert!(left
-				.slice(s![..l])
-				.iter()
-				.all(|&x| right.slice(s![r..]).iter().all(|&y| x <= y)));
-			assert!(right
-				.slice(s![..r])
-				.iter()
-				.all(|&x| left.slice(s![l..]).iter().all(|&y| x < y)));
+			assert!(
+				left.slice(s![..l])
+					.iter()
+					.all(|&x| right.slice(s![r..]).iter().all(|&y| x <= y))
+			);
+			assert!(
+				right
+					.slice(s![..r])
+					.iter()
+					.all(|&x| left.slice(s![l..]).iter().all(|&y| x < y))
+			);
 		}
 
 		check(&[1, 2, 2, 2, 2, 3], &[1, 2, 2, 2, 2, 3]);

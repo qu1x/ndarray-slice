@@ -16,7 +16,7 @@ use core::{
 	mem::{self, ManuallyDrop, MaybeUninit},
 	ptr,
 };
-use ndarray::{s, ArrayView1, ArrayViewMut1, Axis, IndexLonger};
+use ndarray::{ArrayView1, ArrayViewMut1, Axis, IndexLonger, s};
 
 // For slices of up to this length it's probably faster to simply sort them.
 // Defined at the module scope because it's used in multiple functions.

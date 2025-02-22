@@ -4,7 +4,7 @@
 
 use crate::insertion_sort::InsertionHole;
 use core::{mem, ptr};
-use ndarray::{s, ArrayViewMut1, IndexLonger};
+use ndarray::{ArrayViewMut1, IndexLonger, s};
 
 /// Inserts `v[v.len() - 1]` into pre-sorted sequence `v[..v.len() - 1]` so that whole `v[..]`
 /// becomes sorted.

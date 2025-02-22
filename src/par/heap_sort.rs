@@ -2,7 +2,7 @@
 //!
 //! [`core::slice::sort`]: https://doc.rust-lang.org/src/core/slice/sort.rs.html
 
-use ndarray::{s, ArrayViewMut1};
+use ndarray::{ArrayViewMut1, s};
 
 /// Sorts `v` using heapsort, which guarantees *O*(*n* \* log(*n*)) worst-case.
 #[cold]

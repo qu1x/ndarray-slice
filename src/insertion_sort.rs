@@ -3,7 +3,7 @@
 //! [`core::slice::sort`]: https://doc.rust-lang.org/src/core/slice/sort.rs.html
 
 use core::{marker::PhantomData, mem, ptr};
-use ndarray::{s, ArrayViewMut1, IndexLonger};
+use ndarray::{ArrayViewMut1, IndexLonger, s};
 
 // When dropped, copies from `src` into `dest`.
 #[must_use]

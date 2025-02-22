@@ -11,7 +11,7 @@ use core::{
 	mem::{self, ManuallyDrop, MaybeUninit},
 	ptr,
 };
-use ndarray::{s, ArrayView1, ArrayViewMut1, Axis, IndexLonger};
+use ndarray::{ArrayView1, ArrayViewMut1, Axis, IndexLonger, s};
 
 // For slices of up to this length it's probably faster to simply sort them.
 // Defined at the module scope because it's used in multiple functions.
@@ -934,7 +934,7 @@ impl<T> Drop for InsertionHole<T> {
 mod test {
 	use super::{partition_at_index, partition_at_indices, reverse};
 	use crate::{partition_dedup::partition_dedup, quick_sort::quick_sort};
-	use ndarray::{arr1, Array1};
+	use ndarray::{Array1, arr1};
 	use quickcheck::TestResult;
 	use quickcheck_macros::quickcheck;
 

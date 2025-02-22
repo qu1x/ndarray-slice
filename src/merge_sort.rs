@@ -7,7 +7,7 @@
 use crate::insertion_sort::insertion_sort_shift_left;
 use crate::partition::reverse;
 use core::{cmp, mem, ptr};
-use ndarray::{s, ArrayView1, ArrayViewMut1, IndexLonger};
+use ndarray::{ArrayView1, ArrayViewMut1, IndexLonger, s};
 
 /// Merges non-decreasing runs `v[..mid]` and `v[mid..]` using `buf` as temporary storage, and
 /// stores the result into `v[..]`.
@@ -178,7 +178,7 @@ where
 	//    }
 	//}
 
-	impl<'a, T> Drop for MergeHole<'a, T> {
+	impl<T> Drop for MergeHole<'_, T> {
 		fn drop(&mut self) {
 			// SAFETY: `T` is not a zero-sized type, and these are pointers into a slice's elements.
 			unsafe {

@@ -4,7 +4,7 @@
 
 #![cfg(feature = "alloc")]
 
-use crate::merge_sort::{merge_sort, TimSortRun};
+use crate::merge_sort::{TimSortRun, merge_sort};
 use core::{alloc::Layout, mem};
 use ndarray::ArrayViewMut1;
 
