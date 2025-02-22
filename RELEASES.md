@@ -1,3 +1,8 @@
+# Version 0.5.0 (2025-02-22)
+
+  * Rust Edition 2024.
+  * Bump MSRV.
+
 # Version 0.4.0 (2024-09-14)
 
   * Fix doc links.
