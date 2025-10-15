@@ -75,7 +75,6 @@
 	rustdoc::missing_crate_level_docs
 )]
 #![cfg_attr(not(feature = "std"), no_std)]
-#![cfg_attr(docsrs, feature(doc_auto_cfg))]
 #![cfg_attr(miri, feature(maybe_uninit_slice))]
 
 #[inline(always)]

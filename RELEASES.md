@@ -1,3 +1,7 @@
+# Version 0.6.0 (2025-10-15)
+
+  * Bump dependencies.
+
 # Version 0.5.1 (2025-02-22)
 
   * Fix build with `rayon` feature.
