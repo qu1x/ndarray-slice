@@ -67,20 +67,12 @@ jobs:
       run: cargo clippy --tests
     - name: doc
       run: cargo doc
-      env:
-        RUSTDOCFLAGS: "--cfg docsrs"
     - name: doc-no_std
       run: cargo doc --no-default-features --features alloc
-      env:
-        RUSTDOCFLAGS: "--cfg docsrs"
     - name: doc-no_alloc
       run: cargo doc --no-default-features
-      env:
-        RUSTDOCFLAGS: "--cfg docsrs"
     - name: doc-rayon
       run: cargo doc --features rayon
-      env:
-        RUSTDOCFLAGS: "--cfg docsrs"
     - name: fmt
       run: cargo fmt --check
     - name: miri
